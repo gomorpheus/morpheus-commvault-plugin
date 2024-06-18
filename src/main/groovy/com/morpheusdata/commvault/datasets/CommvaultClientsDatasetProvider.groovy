@@ -1,16 +1,11 @@
 package com.morpheusdata.commvault.datasets
 
+import com.morpheusdata.commvault.utils.CommvaultComputeUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
-import com.morpheusdata.core.data.DataAndFilter
-import com.morpheusdata.core.data.DataFilter
-import com.morpheusdata.core.data.DataOrFilter
-import com.morpheusdata.core.data.DataQuery
-import com.morpheusdata.core.data.DatasetInfo
-import com.morpheusdata.core.data.DatasetQuery
+import com.morpheusdata.core.data.*
 import com.morpheusdata.core.providers.AbstractDatasetProvider
 import com.morpheusdata.model.Cloud
-import com.morpheusdata.model.Permission
 import com.morpheusdata.model.ReferenceData
 import com.morpheusdata.model.ResourcePermission
 import groovy.util.logging.Slf4j
@@ -75,88 +70,47 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
         def account = query.user.account
         Cloud cloud = null
         def backupProvider
-        if(cloudId) {
-            cloud = morpheus.services.cloud.get(cloudId)
+        if (cloudId) {
+            cloud = morpheus.async.cloud.get(cloudId).blockingGet()
         }
         if (cloud && cloud.backupProvider) {
-            backupProvider = morpheus.services.backupProvider.find(new DataQuery().withFilter("account", account ).withFilter("id", cloud.backupProvider.id))
+            backupProvider = morpheus.services.backupProvider.find(new DataQuery().withFilter("account", account).withFilter("id", cloud.backupProvider.id))
         }
         if (backupProvider) {
-            def accessibleResourceIds = morpheus.services.resourcePermission
-                    .listAccessibleResources(account.id, ResourcePermission
-                            .ResourceType.BackupServer, null, null) // dustin will add in enum class
-            //def accessibleResourcesQuery = ReferenceData.where { account == backupProvider.account && category == "${backupProvider.type.code}.backup.backupServer.${backupProvider.id}" && enabled == true }
-            def customDataQuery = new DataQuery().withFilters([
+            def accessibleResourceIds = morpheus.services.resourcePermission.listAccessibleResources(account.id, ResourcePermission.ResourceType.NetworkServer, null, null)
+            // dustin will add in enum class
+            // replace NetworkServer with BackupServer
+            def dataQuery = new DataQuery().withFilters([
                     new DataFilter("account", backupProvider.account),
                     new DataFilter("category", "${backupProvider.type.code}.backup.backupServer.${backupProvider.id}"),
                     new DataFilter("enabled", true)
             ])
-            /*def accessibleResourcesQuery = morpheus.services.referenceData.list(new DataQuery()
-                    .withFilter()
-                    .withFilter()
-                    .withFilter())*/
-            if(accessibleResourceIds) {
-                customDataQuery.withFilters([
-                        new DataOrFilter("account", account),
-                        new DataFilter()
-                ])
-                def dataAndFilter = new DataAndFilter()
-                def dataOrFilter = new DataOrFilter()
-                dataAndFilter.withFilters("account.masterAccount", true).withFilters("visibility", "public")
-                dataOrFilter.withFilter("account", account)
-                customDataQuery = customDataQuery.withFilters([
-
-                ])
-                accessibleResourcesQuery = accessibleResourcesQuery.where{ (account == account || (account == masterAccount && visibility == 'public') || id in accessibleResourceIds) }
-            } else {
-                accessibleResourcesQuery = accessibleResourcesQuery.where{ (account == account || (account == masterAccount && visibility == 'public')) }
+            def dataOrFilter = new DataOrFilter(
+                    new DataFilter("account", account),
+                    new DataAndFilter(
+                            new DataFilter("account.masterAccount", account.masterAccount),
+                            new DataFilter("visibility", "public")
+                    )
+            )
+            if (accessibleResourceIds) {
+                dataOrFilter.withFilter(new DataFilter("id", "in", accessibleResourceIds))
             }
-            def clientResults = accessibleResourcesQuery
+            dataQuery.withFilter(dataOrFilter)
+            def clientResults = morpheus.services.referenceData.list(dataQuery)
             if (clientResults.size() > 0) {
                 clientResults.each { client ->
                     def clientInstanceType = client.getConfigProperty('vsInstanceType')
-                    //def clientInstanceTypeCode = clientInstanceType ? commvaultBackupService.getvsInstanceType(clientInstanceType?.toString()) : null
-                    //getvsInstanceType // add this in utility class, create new utility class
-                    def clientInstanceTypeCode // check: ??
-                    if(!cloud || cloud?.cloudType?.provisionTypes.find { it.code == clientInstanceTypeCode }) {
+                    def clientInstanceTypeCode = clientInstanceType ? CommvaultComputeUtility.getvsInstanceType(clientInstanceType?.toString()) : null
+                    if (!cloud || cloud?.cloudType?.provisionTypes.find { it.code == clientInstanceTypeCode }) {
                         clients << [name: client.name, id: client.id, value: client.id]
                     }
                 }
             } else {
-                clients << [name: "No clients setup in Commvault", id:'']
+                clients << [name: "No clients setup in Commvault", id: '']
             }
-        }
-
-
-
-        if(backupProvider) {
-            def accessibleResourceIds = permissionService.resourcesAccessibleByAccount(account.id, 'BackupServer') // permissionService?? // resouce permission serveice
-            def masterAccount = Account.findByMasterAccount(true) // ??
-            def accessibleResourcesQuery = ReferenceData.where { account == backupProvider.account && category == "${backupProvider.type.code}.backup.backupServer.${backupProvider.id}" && enabled == true }
-            // is dataquery for referenceData ??
-            if(accessibleResourceIds) {
-                accessibleResourcesQuery = accessibleResourcesQuery.where{ (account == account || (account == masterAccount && visibility == 'public') || id in accessibleResourceIds) }
-            } else {
-                accessibleResourcesQuery = accessibleResourcesQuery.where{ (account == account || (account == masterAccount && visibility == 'public')) }
-            }
-
-            def clientResults = accessibleResourcesQuery.list()
-            if (clientResults.size() > 0) {
-                clientResults.each { client ->
-                    def clientInstanceType = client.getConfigProperty('vsInstanceType')
-                    def clientInstanceTypeCode = clientInstanceType ? commvaultBackupService.getvsInstanceType(clientInstanceType?.toString()) : null
-                    if(!zone || zone?.zoneType?.provisionTypes.find { it.code == clientInstanceTypeCode }) {
-                        clients << [name: client.name, id: client.id, value: client.id]
-                    }
-                }
-            } else {
-                clients << [name: "No clients setup in Commvault", id:'']
-            }
-
         } else {
-            clients << [name: "No Commvault backup provider found.", id:'']
+            clients << [name: "No Commvault backup provider found.", id: '']
         }
-
         return clients
     }
 
