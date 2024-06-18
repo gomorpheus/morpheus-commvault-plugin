@@ -16,7 +16,7 @@ import io.reactivex.rxjava3.core.Observable
  */
 
 @Slf4j
-class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceData, String> {
+class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceData, Long> {
 
     public static final providerName = 'Commvault Clients Dataset Provider'
     public static final providerNamespace = 'commvault'
@@ -54,7 +54,8 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      */
     @Override
     Observable<ReferenceData> list(DatasetQuery query) {
-        return null
+        query.max = 10
+        return morpheus.async.referenceData.list(query)
     }
 
     /**
@@ -77,9 +78,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
             backupProvider = morpheus.services.backupProvider.find(new DataQuery().withFilter("account", account).withFilter("id", cloud.backupProvider.id))
         }
         if (backupProvider) {
-            def accessibleResourceIds = morpheus.services.resourcePermission.listAccessibleResources(account.id, ResourcePermission.ResourceType.NetworkServer, null, null)
-            // dustin will add in enum class
-            // replace NetworkServer with BackupServer
+            def accessibleResourceIds = morpheus.services.resourcePermission.listAccessibleResources(account.id, ResourcePermission.ResourceType.BackupServer, null, null)
             def dataQuery = new DataQuery().withFilters([
                     new DataFilter("account", backupProvider.account),
                     new DataFilter("category", "${backupProvider.type.code}.backup.backupServer.${backupProvider.id}"),
@@ -101,7 +100,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
                 clientResults.each { client ->
                     def clientInstanceType = client.getConfigProperty('vsInstanceType')
                     def clientInstanceTypeCode = clientInstanceType ? CommvaultComputeUtility.getvsInstanceType(clientInstanceType?.toString()) : null
-                    if (!cloud || cloud?.cloudType?.provisionTypes.find { it.code == clientInstanceTypeCode }) {
+                    if (!cloud || cloud?.cloudType?.provisionTypes?.find { it.code == clientInstanceTypeCode }) {
                         clients << [name: client.name, id: client.id, value: client.id]
                     }
                 }
@@ -111,7 +110,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
         } else {
             clients << [name: "No Commvault backup provider found.", id: '']
         }
-        return clients
+        return Observable.fromIterable(clients)
     }
 
     /**
@@ -123,7 +122,16 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      */
     @Override
     ReferenceData fetchItem(Object value) {
-        return null
+        def rtn = null
+        if (value instanceof Long) {
+            rtn = item((Long) value)
+        } else if (value instanceof CharSequence) {
+            def longValue = value.isNumber() ? value.toLong() : null
+            if (longValue) {
+                rtn = item(longValue)
+            }
+        }
+        return rtn
     }
 
     /**
@@ -132,8 +140,9 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      * @return the
      */
     @Override
-    ReferenceData item(String value) {
-        return null
+    ReferenceData item(Long value) {
+        def rtn = list(new DatasetQuery()).find { it.id == value }
+        return rtn
     }
 
     /**
@@ -143,7 +152,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      */
     @Override
     String itemName(ReferenceData item) {
-        return null
+        return item.name
     }
 
     /**
@@ -152,8 +161,8 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      * @return the corresponding value for the name/value pair list
      */
     @Override
-    String itemValue(ReferenceData item) {
-        return null
+    Long itemValue(ReferenceData item) {
+        return item.id
     }
 
     /**
