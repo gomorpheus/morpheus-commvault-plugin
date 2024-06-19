@@ -5,7 +5,6 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.data.*
 import com.morpheusdata.core.providers.AbstractDatasetProvider
-import com.morpheusdata.model.Cloud
 import com.morpheusdata.model.ReferenceData
 import com.morpheusdata.model.ResourcePermission
 import groovy.util.logging.Slf4j
@@ -21,7 +20,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
     public static final providerName = 'Commvault Clients Dataset Provider'
     public static final providerNamespace = 'commvault'
     public static final providerKey = 'commvaultClients'
-    public static final providerDescription = 'A collection of key/value pairs' // need to change
+    public static final providerDescription = 'A set of data from commvault client'
 
     CommvaultClientsDatasetProvider(Plugin plugin, MorpheusContext morpheus) {
         this.plugin = plugin
@@ -54,27 +53,21 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      */
     @Override
     Observable<ReferenceData> list(DatasetQuery query) {
-        query.max = 10
-        return morpheus.async.referenceData.list(query)
-    }
+        log.debug("clients list: ${query.parameters}")
 
-    /**
-     * list the values in teh dataset in a common format of a name value pair. (example: [[name: "blue", value: 1]])
-     * @param query a DatasetQuery containing the user and map of query params or options to apply to the list
-     * @return a list of maps that have name value pairs of the items
-     */
-    @Override
-    Observable<Map> listOptions(DatasetQuery query) {
-        log.debug("clients: ${query.parameters}")
-        List clients = []
         Long cloudId = query.get("zoneId")?.toLong()
-        def account = query.user.account
-        Cloud cloud = null
+        Long containerId = query.get("containerId")?.toLong()
+        def cloud
         def backupProvider
-        if (cloudId) {
+        def account = query.user.account
+        if (containerId && !cloudId) {
+            def workload = morpheus.services.workload.find(new DataQuery().withFilter("account", account).withFilter("containerId", containerId))
+            cloud = workload?.server?.cloud
+        }
+        if (!cloud && cloudId) {
             cloud = morpheus.async.cloud.get(cloudId).blockingGet()
         }
-        if (cloud && cloud.backupProvider) {
+        if (cloud?.backupProvider) {
             backupProvider = morpheus.services.backupProvider.find(new DataQuery().withFilter("account", account).withFilter("id", cloud.backupProvider.id))
         }
         if (backupProvider) {
@@ -95,7 +88,37 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
                 dataOrFilter.withFilter(new DataFilter("id", "in", accessibleResourceIds))
             }
             dataQuery.withFilter(dataOrFilter)
-            def clientResults = morpheus.services.referenceData.list(dataQuery)
+            return morpheus.services.referenceData.list(dataQuery)
+        }
+        return Observable.empty()
+    }
+
+    /**
+     * list the values in teh dataset in a common format of a name value pair. (example: [[name: "blue", value: 1]])
+     * @param query a DatasetQuery containing the user and map of query params or options to apply to the list
+     * @return a list of maps that have name value pairs of the items
+     */
+    @Override
+    Observable<Map> listOptions(DatasetQuery query) {
+        log.debug("clients: ${query.parameters}")
+        List clients = []
+        Long cloudId = query.get("zoneId")?.toLong()
+        Long containerId = query.get("containerId")?.toLong()
+        def cloud
+        def backupProvider
+        def account = query.user.account
+        if (containerId && !cloudId) {
+            def workload = morpheus.services.workload.find(new DataQuery().withFilter("account", account).withFilter("containerId", containerId))
+            cloud = workload?.server?.cloud
+        }
+        if (!cloud && cloudId) {
+            cloud = morpheus.async.cloud.get(cloudId).blockingGet()
+        }
+        if (cloud?.backupProvider) {
+            backupProvider = morpheus.services.backupProvider.find(new DataQuery().withFilter("account", account).withFilter("id", cloud.backupProvider.id))
+        }
+        if (backupProvider) {
+            def clientResults = list(query).toList().blockingGet()
             if (clientResults.size() > 0) {
                 clientResults.each { client ->
                     def clientInstanceType = client.getConfigProperty('vsInstanceType')
@@ -141,8 +164,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      */
     @Override
     ReferenceData item(Long value) {
-        def rtn = list(new DatasetQuery()).find { it.id == value }
-        return rtn
+        return morpheus.services.referenceData.get(value)
     }
 
     /**
