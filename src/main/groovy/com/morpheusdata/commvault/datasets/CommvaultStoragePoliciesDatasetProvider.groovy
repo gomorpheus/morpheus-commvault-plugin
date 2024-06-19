@@ -45,62 +45,48 @@ class CommvaultStoragePoliciesDatasetProvider extends AbstractDatasetProvider<Re
     Observable list(DatasetQuery datasetQuery) {
         log.debug("list: ${datasetQuery.parameters}")
         def tmpAccount = datasetQuery.user.account
-        Cloud cloud
-        BackupProvider backupProvider
         Long cloudId = datasetQuery.get("zoneId")?.toLong()
-        if(!cloud && cloudId) {
+        Long containerId = datasetQuery.get("containerId")?.toLong()
+
+        Cloud cloud = null
+        BackupProvider backupProvider = null
+
+        if (containerId && !cloudId) {
+            Workload workload = morpheusContext.services.workload.find(new DataQuery().withFilter("account", tmpAccount)
+                    .withFilter("containerId", containerId))
+            cloud = workload?.server?.cloud
+        }
+
+        if (!cloud && cloudId) {
             cloud = morpheusContext.services.cloud.get(cloudId)
         }
-        if(cloud && cloud.backupProvider) {
-            backupProvider = morpheusContext.services.backupProvider.find(new DataQuery().withFilter("account", tmpAccount)
+
+        if (cloud?.backupProvider) {
+            backupProvider = morpheusContext.services.backupProvider.find(new DataQuery().withFilter("account", cloud.account)
                     .withFilter("id", cloud.backupProvider.id))
         }
-        if(cloudId) {
+
+        if (backupProvider) {
             return morpheusContext.services.referenceData.list(new DataQuery()
                     .withFilter("category", "${backupProvider?.type?.code}.backup.storagePolicy.${backupProvider?.id}"))
         }
+
         return Observable.empty()
     }
 
     @Override
     Observable<Map> listOptions(DatasetQuery datasetQuery) {
         log.debug("listOptions: ${datasetQuery.parameters}")
-        def storagePolicies = []
-        def tmpAccount = datasetQuery.user.account
-        Cloud cloud
-        BackupProvider backupProvider
-        Long cloudId = datasetQuery.get("zoneId")?.toLong()
-        Long containerId = datasetQuery.get("containerId")?.toLong()
-        if(containerId && !cloudId) {
-            Workload workload = morpheusContext.services.workload.find(new DataQuery().withFilter("account", tmpAccount)
-                                                            .withFilter("containerId", containerId))
-            cloud = workload?.server?.cloud
-        }
-        if(!cloud && cloudId) {
-            cloud = morpheusContext.services.cloud.get(cloudId)
-        }
-        if(cloud && cloud.backupProvider) {
-            backupProvider = morpheusContext.services.backupProvider.find(new DataQuery().withFilter("account", cloud.account)
-                    .withFilter("id", cloud.backupProvider.id))
+
+        def results = list(datasetQuery).toList().blockingGet().collect { refData ->
+            [name: refData.name, id: refData.id, value: refData.id]
         }
 
-        if(backupProvider) {
-            def results = morpheusContext.services.referenceData.list(new DataQuery()
-                    .withFilter("category", "${backupProvider?.type?.code}.backup.storagePolicy.${backupProvider?.id}"))
-            if (results.size() > 0) {
-                results.each { policy ->
-                    storagePolicies << [name: policy.name, id: policy.id, value: policy.id]
-                }
-            } else {
-                storagePolicies << [name: "No Storage Policies setup in Commvault", id:'']
-            }
-
-        } else {
-            storagePolicies << [name: "No Commvault backup provider found.", id:'']
-        }
+        def storagePolicies = results.isEmpty() ? [[name: "No Storage Policies setup in Commvault", id: '']] : results
 
         return Observable.fromIterable(storagePolicies)
     }
+
 
     @Override
     ReferenceData fetchItem(Object value) {
@@ -118,8 +104,7 @@ class CommvaultStoragePoliciesDatasetProvider extends AbstractDatasetProvider<Re
 
     @Override
     ReferenceData item(Long value) {
-        def rtn = list(new DatasetQuery()).find{ it.id == value }
-        return rtn
+        return morpheus.services.referenceData.get(value)
     }
 
     @Override
