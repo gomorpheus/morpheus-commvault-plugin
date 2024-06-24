@@ -43,7 +43,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
      */
     @Override
     Class<ReferenceData> getItemType() {
-        return null
+        ReferenceData.class
     }
 
     /**
