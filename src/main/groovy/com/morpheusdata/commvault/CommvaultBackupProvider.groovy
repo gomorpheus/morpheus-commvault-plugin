@@ -1,20 +1,25 @@
 package com.morpheusdata.commvault
 
+import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
+import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.BackupProvider as BackupProviderModel
 import com.morpheusdata.model.Icon
 import com.morpheusdata.model.OptionType
 import com.morpheusdata.response.ServiceResponse
+import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
 
 @Slf4j
 class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	BackupJobProvider backupJobProvider;
+
+	static apiBasePath = '/SearchSvc/CVWebService.svc'
 
 	CommvaultBackupProvider(Plugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
@@ -42,7 +47,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	String getName() {
-		return 'Commvault Backup Provider'
+		return 'Commvault'
 	}
 	
 	/**
@@ -129,7 +134,37 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	Collection<OptionType> getOptionTypes() {
-		Collection<OptionType> optionTypes = []
+		Collection<OptionType> optionTypes = new ArrayList();
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.hostUrl", inputType:OptionType.InputType.TEXT, name:'host', category:"backupProviderType.commvault",
+				fieldName:'host', fieldCode: 'gomorpheus.optiontype.ApiUrl', fieldLabel:'Host', fieldContext:'domain', fieldGroup:'default',
+				required:true, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:10, fieldClass:null
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.port", inputType:OptionType.InputType.NUMBER, name:'port', category:"backupProviderType.commvault",
+				fieldName:'port', fieldCode: 'gomorpheus.optiontype.Port', fieldLabel:'Port', fieldContext:'domain', fieldGroup:'default',
+				required:false, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:15, fieldClass:null
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.credential", inputType:OptionType.InputType.CREDENTIAL, name:'credentials', category:"backupProviderType.commvault",
+				fieldName:'type', fieldCode:'gomorpheus.label.credentials', fieldLabel:'Credentials', fieldContext:'credential', optionSource:'credentials',
+				required:true, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:'local', custom:false,
+				displayOrder:25, fieldClass:null, wrapperClass:null, config: JsonOutput.toJson([credentialTypes:['username-password']]).toString()
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.username", inputType:OptionType.InputType.TEXT, name:'username', category:"backupProviderType.commvault",
+				fieldName:'username', fieldCode: 'gomorpheus.optiontype.Username', fieldLabel:'Username', fieldContext:'domain', fieldGroup:'default',
+				required:false, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:30, fieldClass:null, localCredential:true
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.password", inputType:OptionType.InputType.PASSWORD, name:'password', category:"backupProviderType.commvault",
+				fieldName:'password', fieldCode: 'gomorpheus.optiontype.Password', fieldLabel:'Password', fieldContext:'domain', fieldGroup:'default',
+				required:false, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:35, fieldClass:null, localCredential:true
+		)
 		return optionTypes
 	}
 
@@ -222,9 +257,102 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * validation and will halt the backup provider creation process.
 	 */
 	@Override
-	ServiceResponse validateBackupProvider(BackupProviderModel backupProviderModel, Map opts) {
-		def rtn = ServiceResponse.success(backupProviderModel)
+	ServiceResponse validateBackupProvider(BackupProvider backupProvider, Map opts) {
+		log.debug "validateBackupProvider: ${backupProvider}, opts: ${opts}"
+		def rtn = [success:false, errors:[:]]
+		try {
+			def apiOpts = [:]
+			//validate input fields
+			rtn.data = backupProvider
+			//credentials
+			def credential = morpheus.async.accountCredential.loadCredentialConfig(opts.credential, [username: backupProvider.username, password: backupProvider.password]).blockingGet()
+			if(!credential.data?.username) {
+				rtn.errors.username = 'Enter a username'
+				rtn.msg = 'Missing required parameter'
+			}
+			if(!credential.data?.password) {
+				rtn.errors.password = 'Enter a password'
+				rtn.msg = 'Missing required parameter'
+			}
+			if(!rtn.errors) {
+				backupProvider.credentialData = credential.data
+				backupProvider.credentialLoaded = true
+				def testResults = testConnection(backupProvider, apiOpts)
+				log.debug("api test results: {}", testResults)
+				if (testResults.success == true)
+					rtn.success = true
+				else if (testResults.invalidLogin == true)
+					rtn.msg = testResults.msg ?: 'unauthorized - invalid credentials'
+				else if (testResults.found == false)
+					rtn.msg = testResults.msg ?: 'commvault not found - invalid host'
+				else
+					rtn.msg = testResults.msg ?: 'unable to connect to commvault'
+			}
+		} catch(e) {
+			log.error("error validating commvault configuration: ${e}", e)
+			rtn.msg = 'unknown error connecting to commvault'
+			rtn.success = false
+		}
+		return ServiceResponse.create(rtn)
+	}
+
+	def testConnection(BackupProvider backupProvider, Map opts) {
+		def rtn = [success:false, invalidLogin:false, found:true]
+		opts.authConfig = opts.authConfig ?: getAuthConfig(backupProvider)
+		def tokenResults = loginSession(opts.authConfig.apiUrl, opts.authConfig.username, opts.authConfig.password)
+		if(tokenResults.success == true) {
+			rtn.success = true
+			def token = tokenResults.tokenf
+			def sessionId = tokenResults.sessionId
+			logoutSession(opts.authConfig.apiUrl, token)
+		} else {
+			if(tokenResults?.errorCode == '404' || tokenResults?.errorCode == 404)
+				rtn.found = false
+			if(tokenResults?.errorCode == '401' || tokenResults?.errorCode == 401)
+				rtn.invalidLogin = true
+			rtn.msg = tokenResults.msg
+			rtn.errorCode = tokenResults.errorCode
+		}
 		return rtn
+	}
+
+	def getAuthConfig(BackupProvider backupProvider) {
+		//credentials
+		morpheus.async.accountCredential.loadCredentials(backupProvider)
+		def rtn = [
+				apiUrl:getApiUrl(backupProvider),
+				username:backupProvider.credentialData?.username ?: backupProvider.username,
+				password:backupProvider.credentialData?.password ?: backupProvider.password,
+				basePath:apiBasePath
+		]
+		return rtn
+	}
+
+	def getApiUrl(BackupProvider backupProvider) {
+		def scheme = backupProvider.host.contains("http") ? "" : "http://"
+		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
+
+		return apiUrl
+	}
+
+	def loginSession(String apiUrl, String username, String password) {
+		def rtn = [success: false]
+		def response = CommvaultBackupUtility.getToken(apiUrl, username, password)
+		if(response.success) {
+			rtn.success = true
+			rtn.token = response.token
+		} else {
+			rtn.success = false
+			rtn.msg = response.msg
+			rtn.errorCode = response.errorCode
+		}
+		return rtn
+	}
+
+	def logoutSession(String apiUrl, String token) {
+		if(token) {
+			CommvaultBackupUtility.logout(apiUrl, token)
+		}
 	}
 
 	/**

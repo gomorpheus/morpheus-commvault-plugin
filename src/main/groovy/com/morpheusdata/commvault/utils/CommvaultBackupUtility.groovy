@@ -1,6 +1,7 @@
-package com.morpheusdata.commvault.util
+package com.morpheusdata.commvault.utils
 
 import com.morpheusdata.core.util.HttpApiClient
+import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 import groovy.xml.XmlSlurper
 
@@ -621,8 +622,10 @@ class CommvaultBackupUtility {
 		return rtn
 	}
 
-	static callApi(url, path, token, opts = [:], method = 'POSt') {
-		def rtn = [success:false]
+	static callApi(url, path, token, opts = [:], method) {
+		def rtn = ServiceResponse.prepare()
+		def httpApiClient = new HttpApiClient()
+		def requestOpts = new HttpApiClient.RequestOptions()
 		try {
 			log.debug("calling: ${url}${path} - token: ${token}")
 			String connectTimeout = System.getProperty('com.gomorpheus.commvault.connect.timeout', '5000')
@@ -631,11 +634,16 @@ class CommvaultBackupUtility {
 			opts.readTimeout = opts.readTimeout ?: readTimeout?.toInteger()
 			opts.headers = buildHeaders(token, opts)
 
+			requestOpts.body = opts.body
+			requestOpts.contentType = "application/xml"  // Since format is xml
+			requestOpts.headers = opts.headers.findAll {k, v -> v != null}
+			requestOpts.connectionTimeout = opts.connectTimeout
+			requestOpts.readTimeout = opts.readTimeout
 			if(opts.format == 'json') {
-				rtn = HttpApiClient.callJsonApi(url, path, null, null, opts, method)
+				rtn = httpApiClient.callJsonApi(url, path, null, null, requestOpts, method)
 			} else if(opts.format == 'text/xml') {
 				opts.headers['Content-Type'] = 'text/plain'
-				rtn = HttpApiClient.callApi(url, path, null, null, opts, method)
+				rtn = httpApiClient.callApi(url, path, null, null, requestOpts, method)
 				rtn.data = [:]
 				if(rtn.content?.length() > 0) {
 					try {
@@ -645,7 +653,7 @@ class CommvaultBackupUtility {
 					}
 				}
 			} else {
-				rtn = HttpApiClient.callXmlApi(url, path, null, null, opts, method)
+				rtn = httpApiClient.callXmlApi(url, path, null, null, requestOpts, method)
 			}
 			if(rtn.success == false && rtn.errorCode && !rtn.errorMessage) {
 				rtn.errorMessage = getApiResultsErrorMessage(rtn.data)
@@ -654,7 +662,7 @@ class CommvaultBackupUtility {
 				def responseError = getApiResultsError(rtn.data)
 				if(responseError.success) {
 					rtn.errorCode = responseError.errorCode
-					rtn.errorMessage = responseError.errorMessage
+					rtn.error = responseError.errorMessage
 				}
 			}
 		} catch(e) {
