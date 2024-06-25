@@ -1,7 +1,6 @@
 package com.morpheusdata.commvault
 
 import com.morpheusdata.commvault.util.CommvaultBackupUtility
-import com.morpheusdata.core.MorpheusAccountCredentialService
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.AbstractBackupProvider
@@ -12,13 +11,13 @@ import com.morpheusdata.model.BackupProvider as BackupProviderModel
 import com.morpheusdata.model.Icon
 import com.morpheusdata.model.OptionType
 import com.morpheusdata.response.ServiceResponse
+import groovy.json.JsonOutput
 import groovy.util.logging.Slf4j
 
 @Slf4j
 class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	BackupJobProvider backupJobProvider;
-	MorpheusAccountCredentialService credentialService;
 
 	static apiBasePath = '/SearchSvc/CVWebService.svc'
 
@@ -135,7 +134,37 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	Collection<OptionType> getOptionTypes() {
-		Collection<OptionType> optionTypes = []
+		Collection<OptionType> optionTypes = new ArrayList();
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.hostUrl", inputType:OptionType.InputType.TEXT, name:'host', category:"backupProviderType.commvault",
+				fieldName:'host', fieldCode: 'gomorpheus.optiontype.ApiUrl', fieldLabel:'Host', fieldContext:'domain', fieldGroup:'default',
+				required:true, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:10, fieldClass:null
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.port", inputType:OptionType.InputType.NUMBER, name:'port', category:"backupProviderType.commvault",
+				fieldName:'port', fieldCode: 'gomorpheus.optiontype.Port', fieldLabel:'Port', fieldContext:'domain', fieldGroup:'default',
+				required:false, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:15, fieldClass:null
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.credential", inputType:OptionType.InputType.CREDENTIAL, name:'credentials', category:"backupProviderType.commvault",
+				fieldName:'type', fieldCode:'gomorpheus.label.credentials', fieldLabel:'Credentials', fieldContext:'credential', optionSource:'credentials',
+				required:true, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:'local', custom:false,
+				displayOrder:25, fieldClass:null, wrapperClass:null, config: JsonOutput.toJson([credentialTypes:['username-password']]).toString()
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.username", inputType:OptionType.InputType.TEXT, name:'username', category:"backupProviderType.commvault",
+				fieldName:'username', fieldCode: 'gomorpheus.optiontype.Username', fieldLabel:'Username', fieldContext:'domain', fieldGroup:'default',
+				required:false, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:30, fieldClass:null, localCredential:true
+		)
+		optionTypes << new OptionType(
+				code:"backupProviderType.commvault.password", inputType:OptionType.InputType.PASSWORD, name:'password', category:"backupProviderType.commvault",
+				fieldName:'password', fieldCode: 'gomorpheus.optiontype.Password', fieldLabel:'Password', fieldContext:'domain', fieldGroup:'default',
+				required:false, enabled:true, editable:true, global:false, placeHolder:null, helpBlock:'', defaultValue:null, custom:false,
+				displayOrder:35, fieldClass:null, localCredential:true
+		)
 		return optionTypes
 	}
 
@@ -227,29 +256,20 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * @return a {@link ServiceResponse} object. A ServiceResponse with a false success will indicate a failed
 	 * validation and will halt the backup provider creation process.
 	 */
-//	@Override
-//	ServiceResponse validateBackupProvider(BackupProviderModel backupProviderModel, Map opts) {
-//		def rtn = ServiceResponse.success(backupProviderModel)
-//		return rtn
-//	}
 	@Override
 	ServiceResponse validateBackupProvider(BackupProvider backupProvider, Map opts) {
-//		log.debug "validateBackupProvider: ${backupProvider}"
-		log.info("RAZI :: validateBackupProvider : backupProvider: ${backupProvider} :: opts: ${opts}")
+		log.debug "validateBackupProvider: ${backupProvider}, opts: ${opts}"
 		def rtn = [success:false, errors:[:]]
 		try {
 			def apiOpts = [:]
 			//validate input fields
 			rtn.data = backupProvider
 			//credentials
-			def credential = credentialService.loadCredentialConfig(opts.credential, [username: backupProvider.username, password: backupProvider.password])
-			log.info("RAZI :: credential: ${credential}")
-			log.info("RAZI :: credential.data?.username: ${credential.data?.username}")
+			def credential = morpheus.async.accountCredential.loadCredentialConfig(opts.credential, [username: backupProvider.username, password: backupProvider.password]).blockingGet()
 			if(!credential.data?.username) {
 				rtn.errors.username = 'Enter a username'
 				rtn.msg = 'Missing required parameter'
 			}
-			log.info("RAZI :: credential.data?.password: ${credential.data?.password}")
 			if(!credential.data?.password) {
 				rtn.errors.password = 'Enter a password'
 				rtn.msg = 'Missing required parameter'
@@ -257,10 +277,8 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 			if(!rtn.errors) {
 				backupProvider.credentialData = credential.data
 				backupProvider.credentialLoaded = true
-				log.info("RAZI :: backupProvider: ${backupProvider}, apiOpts: ${apiOpts}")
 				def testResults = testConnection(backupProvider, apiOpts)
-				log.info("RAZI :: testResults: ${testResults}")
-//				log.debug("api test results: {}", testResults)
+				log.debug("api test results: {}", testResults)
 				if (testResults.success == true)
 					rtn.success = true
 				else if (testResults.invalidLogin == true)
@@ -275,47 +293,38 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 			rtn.msg = 'unknown error connecting to commvault'
 			rtn.success = false
 		}
-		log.info("RAZI :: RTN : validateBackupProvider: ${rtn}")
 		return ServiceResponse.create(rtn)
 	}
 
 	def testConnection(BackupProvider backupProvider, Map opts) {
 		def rtn = [success:false, invalidLogin:false, found:true]
 		opts.authConfig = opts.authConfig ?: getAuthConfig(backupProvider)
-		log.info("RAZI :: opts.authConfig: ${opts.authConfig}")
 		def tokenResults = loginSession(opts.authConfig.apiUrl, opts.authConfig.username, opts.authConfig.password)
-		log.info("RAZI :: tokenResults: ${tokenResults}")
 		if(tokenResults.success == true) {
 			rtn.success = true
 			def token = tokenResults.tokenf
 			def sessionId = tokenResults.sessionId
-			log.info("RAZI :: calling logoutSession")
 			logoutSession(opts.authConfig.apiUrl, token)
-			log.info("RAZI :: logoutSession COMPLETED")
 		} else {
-			log.info("RAZI :: calling to error code")
 			if(tokenResults?.errorCode == '404' || tokenResults?.errorCode == 404)
 				rtn.found = false
 			if(tokenResults?.errorCode == '401' || tokenResults?.errorCode == 401)
 				rtn.invalidLogin = true
 			rtn.msg = tokenResults.msg
 			rtn.errorCode = tokenResults.errorCode
-			log.info("RAZI :: calling to error code COMPLETED")
 		}
-		log.info("RAZI :: RTN : testConnection: ${rtn}")
 		return rtn
 	}
 
 	def getAuthConfig(BackupProvider backupProvider) {
 		//credentials
-		credentialService.loadCredentials(backupProvider)
+		morpheus.async.accountCredential.loadCredentials(backupProvider)
 		def rtn = [
 				apiUrl:getApiUrl(backupProvider),
 				username:backupProvider.credentialData?.username ?: backupProvider.username,
 				password:backupProvider.credentialData?.password ?: backupProvider.password,
 				basePath:apiBasePath
 		]
-		log.info("RAZI :: RTN : getAuthConfig: ${rtn}")
 		return rtn
 	}
 
@@ -328,7 +337,6 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	def loginSession(String apiUrl, String username, String password) {
 		def rtn = [success: false]
-		def token
 		def response = CommvaultBackupUtility.getToken(apiUrl, username, password)
 		if(response.success) {
 			rtn.success = true
@@ -344,7 +352,6 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	def logoutSession(String apiUrl, String token) {
 		if(token) {
 			CommvaultBackupUtility.logout(apiUrl, token)
-			log.info("RAZI :: calling logoutSession SUCCESS")
 		}
 	}
 
