@@ -1,6 +1,6 @@
 package com.morpheusdata.commvault
 
-import com.morpheusdata.commvault.util.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.AbstractBackupProvider

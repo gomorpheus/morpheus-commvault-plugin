@@ -1,7 +1,6 @@
-package com.morpheusdata.commvault.util
+package com.morpheusdata.commvault.utils
 
 import com.morpheusdata.core.util.HttpApiClient
-import com.morpheusdata.core.util.RestApiUtil
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 import groovy.xml.XmlSlurper
