@@ -47,7 +47,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	String getName() {
-		return 'Commvault Backup Provider'
+		return 'Commvault'
 	}
 	
 	/**
