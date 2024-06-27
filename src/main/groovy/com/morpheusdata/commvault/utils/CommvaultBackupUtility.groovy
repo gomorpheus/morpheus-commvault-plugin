@@ -1,6 +1,7 @@
 package com.morpheusdata.commvault.utils
 
 import com.morpheusdata.core.util.HttpApiClient
+import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 import groovy.xml.XmlSlurper
@@ -41,11 +42,21 @@ class CommvaultBackupUtility {
 		return rtn
 	}
 
+	static getApiUrl(BackupProvider backupProvider) {
+		def scheme = backupProvider.host.contains("http") ? "" : "http://"
+		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
+
+		return apiUrl
+	}
+
 	// jobs
 	static listSubclients(authConfig, opts){
+		log.info("RAZI :: authConfig: ${authConfig}")
 		def rtn = [success:true, subclients: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
-		opts.clients.each { clientReferenceData ->
+		log.info("RAZI :: opts: ${opts}")
+//		opts.clients.each { clientReferenceData ->
+		opts.each { clientReferenceData ->
 			def query = ['clientId': clientReferenceData.getConfigProperty("internalId")]
 			def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Subclient", authConfig.token, [format:'json', query: query], 'GET')
 

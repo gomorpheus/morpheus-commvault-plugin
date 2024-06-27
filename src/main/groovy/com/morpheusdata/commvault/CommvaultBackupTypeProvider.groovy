@@ -22,7 +22,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	BackupExecutionProvider executionProvider;
 	BackupRestoreProvider restoreProvider;
 
-	CommvaultBackupTypeProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	CommvaultBackupTypeProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
 	}
 

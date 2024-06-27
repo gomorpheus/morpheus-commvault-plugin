@@ -18,11 +18,13 @@ import groovy.util.logging.Slf4j
 class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	BackupJobProvider backupJobProvider;
+	private CommvaultPlugin plugin
 
-	static apiBasePath = '/SearchSvc/CVWebService.svc'
+//	static apiBasePath = '/SearchSvc/CVWebService.svc'
 
-	CommvaultBackupProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	CommvaultBackupProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
+		this.plugin = plugin
 
 		CommvaultBackupTypeProvider backupTypeProvider = new CommvaultBackupTypeProvider(plugin, morpheus)
 		plugin.registerProvider(backupTypeProvider)
@@ -36,7 +38,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	String getCode() {
-		return 'commvault-backup'
+		return 'commvault'
 	}
 
 	/**
@@ -298,7 +300,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	def testConnection(BackupProvider backupProvider, Map opts) {
 		def rtn = [success:false, invalidLogin:false, found:true]
-		opts.authConfig = opts.authConfig ?: getAuthConfig(backupProvider)
+		opts.authConfig = opts.authConfig ?: plugin.getAuthConfig(backupProvider)
 		def tokenResults = loginSession(opts.authConfig.apiUrl, opts.authConfig.username, opts.authConfig.password)
 		if(tokenResults.success == true) {
 			rtn.success = true
@@ -316,24 +318,24 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		return rtn
 	}
 
-	def getAuthConfig(BackupProvider backupProvider) {
-		//credentials
-		morpheus.async.accountCredential.loadCredentials(backupProvider)
-		def rtn = [
-				apiUrl:getApiUrl(backupProvider),
-				username:backupProvider.credentialData?.username ?: backupProvider.username,
-				password:backupProvider.credentialData?.password ?: backupProvider.password,
-				basePath:apiBasePath
-		]
-		return rtn
-	}
+//	def getAuthConfig(BackupProvider backupProvider) {
+//		//credentials
+//		morpheus.async.accountCredential.loadCredentials(backupProvider)
+//		def rtn = [
+//				apiUrl:CommvaultBackupUtility.getApiUrl(backupProvider),
+//				username:backupProvider.credentialData?.username ?: backupProvider.username,
+//				password:backupProvider.credentialData?.password ?: backupProvider.password,
+//				basePath:apiBasePath
+//		]
+//		return rtn
+//	}
 
-	def getApiUrl(BackupProvider backupProvider) {
-		def scheme = backupProvider.host.contains("http") ? "" : "http://"
-		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
-
-		return apiUrl
-	}
+//	def getApiUrl(BackupProvider backupProvider) {
+//		def scheme = backupProvider.host.contains("http") ? "" : "http://"
+//		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
+//
+//		return apiUrl
+//	}
 
 	def loginSession(String apiUrl, String username, String password) {
 		def rtn = [success: false]
