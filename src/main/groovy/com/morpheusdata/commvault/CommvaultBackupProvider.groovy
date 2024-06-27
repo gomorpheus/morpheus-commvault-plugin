@@ -381,24 +381,24 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		ServiceResponse response = ServiceResponse.prepare()
 		try {
 			def authConfig = getAuthConfig(backupProvider)
-			def apiOpts = [authConfig:authConfig]
+			def apiOpts = [authConfig: authConfig]
 			def apiUrl = authConfig.apiUrl
 			def apiUrlObj = new URL(apiUrl)
 			def apiHost = apiUrlObj.getHost()
 			def apiPort = apiUrlObj.getPort() > 0 ? apiUrlObj.getPort() : (apiUrlObj?.getProtocol()?.toLowerCase() == 'https' ? 443 : 80)
 			def hostOnline = ConnectionUtils.testHostConnectivity(apiHost, apiPort, true, true, null)
 			log.debug("commvault host online: {}", hostOnline)
-			if(hostOnline) {
+			if (hostOnline) {
 				def testResults = testConnection(backupProvider, apiOpts)
 				log.debug("testResults: ${testResults}")
-				if(testResults.success == true) {
+				if (testResults.success == true) {
 					morpheus.async.backupProvider.updateStatus(backupProvider, 'ok', null).subscribe().dispose()
 					//cache info
 					response.success = true
 				} else {
-					if(testResults.invalidLogin == true) {
+					if (testResults.invalidLogin == true) {
 						morpheus.async.backupProvider.updateStatus(backupProvider, 'error', 'invalid credentials').subscribe().dispose()
-					} else if(testResults.found == false) {
+					} else if (testResults.found == false) {
 						morpheus.async.backupProvider.updateStatus(backupProvider, 'error', 'commvault not found - invalid host').subscribe().dispose()
 					} else {
 						morpheus.async.backupProvider.updateStatus(backupProvider, 'error', 'unable to connect to commvault').subscribe().dispose()
@@ -407,7 +407,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 			} else {
 				morpheus.async.backupProvider.updateStatus(backupProvider, 'offline', 'commvault not reachable').subscribe().dispose()
 			}
-		} catch(e) {
+		} catch (e) {
 			log.error("refresh BackupProvider error: ${e}", e)
 		}
 		return response
