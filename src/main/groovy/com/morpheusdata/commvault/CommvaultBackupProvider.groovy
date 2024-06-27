@@ -6,6 +6,7 @@ import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
+import com.morpheusdata.core.util.ConnectionUtils
 import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.BackupProvider as BackupProviderModel
 import com.morpheusdata.model.Icon
@@ -375,7 +376,62 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * @return the success state of the refresh
 	 */
 	@Override
-	ServiceResponse refresh(BackupProviderModel backupProviderModel) {
-		return ServiceResponse.success()
+	ServiceResponse refresh(BackupProvider backupProvider) {
+		log.debug("refresh backup provider: {}", backupProvider)
+		log.info("Ray: refresh: backupProvider: ${backupProvider}")
+		ServiceResponse response = ServiceResponse.prepare()
+		try {
+			def authConfig = getAuthConfig(backupProvider)
+			log.info("Ray: refresh: authConfig: ${authConfig}")
+			def apiOpts = [authConfig:authConfig]
+			def apiUrl = authConfig.apiUrl
+			log.info("Ray: refresh: apiUrl: ${apiUrl}")
+			def apiUrlObj = new URL(apiUrl)
+			def apiHost = apiUrlObj.getHost()
+			log.info("Ray: refresh: apiHost: ${apiHost}")
+			def apiPort = apiUrlObj.getPort() > 0 ? apiUrlObj.getPort() : (apiUrlObj?.getProtocol()?.toLowerCase() == 'https' ? 443 : 80)
+			log.info("Ray: refresh: apiPort: ${apiPort}")
+			def hostOnline = ConnectionUtils.testHostConnectivity(apiHost, apiPort, true, true, null)
+			log.info("Ray: refresh: hostOnline: ${hostOnline}")
+			log.debug("commvault host online: {}", hostOnline)
+			if(hostOnline) {
+				log.info("Ray: refresh: calling testConnection")
+				def testResults = testConnection(backupProvider, apiOpts)
+				log.info("Ray: refresh: calling testResults: ${testResults}")
+				if(testResults.success == true) {
+					morpheus.async.backupProvider.updateStatus(backupProvider, 'ok', null).subscribe().dispose()
+					//cache info
+					//cacheClients(backupProvider, authConfig) // backup servers
+					//cacheSubclients(backupProvider, authConfig) // backup jobs
+					//cacheBackupSets(backupProvider, authConfig)
+					//cacheStoragePolicies(backupProvider, authConfig)
+					//cachePlans(backupProvider, authConfig)
+					//clearBackupProviderAlarm(backupProvider)
+					//done
+					log.info("Ray: refresh: inside if condition")
+					response.success = true
+				} else {
+					log.info("Ray: refresh: inside else1 condition")
+					if(testResults.invalidLogin == true) {
+						log.info("Ray: refresh: inside else2 condition")
+						morpheus.async.backupProvider.updateStatus(backupProvider, 'error', 'invalid credentials').subscribe().dispose()
+					} else if(testResults.found == false) {
+						log.info("Ray: refresh: inside else3 condition")
+						morpheus.async.backupProvider.updateStatus(backupProvider, 'error', 'commvault not found - invalid host').subscribe().dispose()
+					} else {
+						log.info("Ray: refresh: inside else4 condition")
+						morpheus.async.backupProvider.updateStatus(backupProvider, 'error', 'unable to connect to commvault').subscribe().dispose()
+					}
+				}
+			} else {
+				log.info("Ray: refresh: inside else5 condition")
+				morpheus.async.backupProvider.updateStatus(backupProvider, 'offline', 'commvault not reachable').subscribe().dispose()
+			}
+			log.info("Ray: refresh: calling response: ${response.results}")
+		} catch(e) {
+			log.error("Ray :: refreshBackupProvider error: ${e}", e)
+		}
+		log.info("Ray: refresh: calling response1: ${response.results}")
+		return response
 	}
 }
