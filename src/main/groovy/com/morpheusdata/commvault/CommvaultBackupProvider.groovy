@@ -1,5 +1,6 @@
 package com.morpheusdata.commvault
 
+import com.morpheusdata.commvault.sync.ClientSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
@@ -394,6 +395,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 				if (testResults.success == true) {
 					morpheus.async.backupProvider.updateStatus(backupProvider, 'ok', null).subscribe().dispose()
 					//cache info
+					new ClientSync(morpheus, backupProvider, authConfig).execute()
 					response.success = true
 				} else {
 					if (testResults.invalidLogin == true) {
