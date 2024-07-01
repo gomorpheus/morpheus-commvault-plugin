@@ -38,7 +38,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	String getCode() {
-		return 'commvault-backup'
+		return 'commvault'
 	}
 
 	/**
@@ -394,8 +394,11 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 				log.debug("testResults: ${testResults}")
 				if (testResults.success == true) {
 					morpheus.async.backupProvider.updateStatus(backupProvider, 'ok', null).subscribe().dispose()
-					//cache info
+
+					def now = new Date().time
 					new ClientSync(morpheus, backupProvider, authConfig).execute()
+					log.debug("ClientSync in ${new Date().time - now}ms")
+
 					response.success = true
 				} else {
 					if (testResults.invalidLogin == true) {

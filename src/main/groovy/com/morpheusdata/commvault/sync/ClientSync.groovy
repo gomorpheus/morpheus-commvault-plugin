@@ -29,19 +29,20 @@ class ClientSync {
     }
 
     def execute() {
-        log.debug("ClientSync >> execute() called")
+        log.debug("ClientSync >> execute()")
         try {
             def listResults = CommvaultBackupUtility.listClients(this.authConfigMap)
+            log.debug("listResults.success: ${listResults.success}")
             if (listResults.success) {
                 def existingItems = morpheus.async.referenceData.listIdentityProjections(
-                        new DataQuery().withFilters([new DataFilter('account', backupProvider.account),
+                        new DataQuery().withFilters([new DataFilter('account.id', backupProvider.account.id),
                                                      new DataFilter('category', "${backupProvider.type.code}.backup.backupServer.${backupProvider.id}")])
                 )
                 SyncTask<ReferenceDataSyncProjection, Map, ReferenceData> syncTask = new SyncTask<>(existingItems, listResults.clients as Collection<Map>)
                 syncTask.addMatchFunction { ReferenceDataSyncProjection domainObject, Map cloudItem ->
                     domainObject.externalId.toString() == cloudItem.externalId.toString()
                 }.onDelete { removeItems ->
-                    log.info("removing backup server {}", removeItems.size())
+                    log.debug("onDelete removeItems:", removeItems.size())
                     morpheus.services.referenceData.bulkRemove(removeItems)
                 }.onAdd { itemsToAdd ->
                     addMissingClients(itemsToAdd)
@@ -74,7 +75,8 @@ class ClientSync {
                         keyValue  : cloudItem.externalId,
                         value     : cloudItem.externalId,
                         internalId: cloudItem.internalId,
-                        externalId: cloudItem.externalId
+                        externalId: cloudItem.externalId,
+                        type      : 'string'
                 ]
                 def add = new ReferenceData(addConfig)
                 add.setConfigMap(cloudItem)

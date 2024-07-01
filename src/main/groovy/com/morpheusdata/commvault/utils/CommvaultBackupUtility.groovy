@@ -639,6 +639,7 @@ class CommvaultBackupUtility {
 			requestOpts.headers = opts.headers.findAll {k, v -> v != null}
 			requestOpts.connectionTimeout = opts.connectTimeout
 			requestOpts.readTimeout = opts.readTimeout
+			requestOpts.queryParams = opts.query
 			if(opts.format == 'json') {
 				rtn = httpApiClient.callJsonApi(url, path, null, null, requestOpts, method)
 			} else if(opts.format == 'text/xml') {
