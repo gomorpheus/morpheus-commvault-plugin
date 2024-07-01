@@ -9,7 +9,7 @@ import groovy.xml.XmlSlurper
 class CommvaultBackupUtility {
 
 	// backup servers
-	static listClients(authConfig, opts){
+	static listClients(authConfig){
 		def rtn = [success:true, clients: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		def query = ['PseudoClientType': 'VSPseudo'] // only list virtualization clients
@@ -639,6 +639,7 @@ class CommvaultBackupUtility {
 			requestOpts.headers = opts.headers.findAll {k, v -> v != null}
 			requestOpts.connectionTimeout = opts.connectTimeout
 			requestOpts.readTimeout = opts.readTimeout
+			requestOpts.queryParams = opts.query
 			if(opts.format == 'json') {
 				rtn = httpApiClient.callJsonApi(url, path, null, null, requestOpts, method)
 			} else if(opts.format == 'text/xml') {
