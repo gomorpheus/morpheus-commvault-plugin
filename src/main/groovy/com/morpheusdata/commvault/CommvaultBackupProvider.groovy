@@ -21,8 +21,6 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	BackupJobProvider backupJobProvider;
 	private CommvaultPlugin plugin
 
-//	static apiBasePath = '/SearchSvc/CVWebService.svc'
-
 	CommvaultBackupProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
 		this.plugin = plugin
