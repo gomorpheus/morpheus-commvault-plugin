@@ -1,9 +1,9 @@
 package com.morpheusdata.commvault
 
+import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.sync.ClientSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
@@ -20,11 +20,11 @@ import groovy.util.logging.Slf4j
 class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	BackupJobProvider backupJobProvider;
+	private CommvaultPlugin plugin
 
-	static apiBasePath = '/SearchSvc/CVWebService.svc'
-
-	CommvaultBackupProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	CommvaultBackupProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
+		this.plugin = plugin
 
 		CommvaultBackupTypeProvider backupTypeProvider = new CommvaultBackupTypeProvider(plugin, morpheus)
 		plugin.registerProvider(backupTypeProvider)
@@ -300,11 +300,11 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	def testConnection(BackupProvider backupProvider, Map opts) {
 		def rtn = [success:false, invalidLogin:false, found:true]
-		opts.authConfig = opts.authConfig ?: getAuthConfig(backupProvider)
+		opts.authConfig = opts.authConfig ?: plugin.getAuthConfig(backupProvider)
 		def tokenResults = loginSession(opts.authConfig.apiUrl, opts.authConfig.username, opts.authConfig.password)
 		if(tokenResults.success == true) {
 			rtn.success = true
-			def token = tokenResults.tokenf
+			def token = tokenResults.token
 			def sessionId = tokenResults.sessionId
 			logoutSession(opts.authConfig.apiUrl, token)
 		} else {
@@ -316,25 +316,6 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 			rtn.errorCode = tokenResults.errorCode
 		}
 		return rtn
-	}
-
-	def getAuthConfig(BackupProvider backupProvider) {
-		//credentials
-		morpheus.async.accountCredential.loadCredentials(backupProvider)
-		def rtn = [
-				apiUrl:getApiUrl(backupProvider),
-				username:backupProvider.credentialData?.username ?: backupProvider.username,
-				password:backupProvider.credentialData?.password ?: backupProvider.password,
-				basePath:apiBasePath
-		]
-		return rtn
-	}
-
-	def getApiUrl(BackupProvider backupProvider) {
-		def scheme = backupProvider.host.contains("http") ? "" : "http://"
-		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
-
-		return apiUrl
 	}
 
 	def loginSession(String apiUrl, String username, String password) {
@@ -381,7 +362,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		log.debug("refresh backup provider: {}", backupProvider)
 		ServiceResponse response = ServiceResponse.prepare()
 		try {
-			def authConfig = getAuthConfig(backupProvider)
+			def authConfig = plugin.getAuthConfig(backupProvider)
 			def apiOpts = [authConfig: authConfig]
 			def apiUrl = authConfig.apiUrl
 			def apiUrlObj = new URL(apiUrl)
@@ -398,6 +379,10 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 					def now = new Date().time
 					new ClientSync(morpheus, backupProvider, authConfig).execute()
 					log.debug("ClientSync in ${new Date().time - now}ms")
+          
+					now = new Date().time
+					new SubclientsSync(backupProvider, plugin).execute()
+					log.info("${backupProvider.name}: SubclientsSync in ${new Date().time - now}ms")
 
 					response.success = true
 				} else {

@@ -15,9 +15,14 @@
 */
 package com.morpheusdata.commvault
 
+import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.model.BackupProvider
 
 class CommvaultPlugin extends Plugin {
+
+    static apiBasePath = '/SearchSvc/CVWebService.svc'
 
     @Override
     String getCode() {
@@ -36,5 +41,21 @@ class CommvaultPlugin extends Plugin {
     @Override
     void onDestroy() {
         //nothing to do for now
+    }
+
+    def getAuthConfig(BackupProvider backupProvider) {
+        //credentials
+        morpheus.async.accountCredential.loadCredentials(backupProvider)
+        def rtn = [
+                apiUrl: CommvaultBackupUtility.getApiUrl(backupProvider),
+                username:backupProvider.credentialData?.username ?: backupProvider.username,
+                password:backupProvider.credentialData?.password ?: backupProvider.password,
+                basePath:apiBasePath
+        ]
+        return rtn
+    }
+
+    MorpheusContext getMorpheusContext() {
+        this.morpheus
     }
 }
