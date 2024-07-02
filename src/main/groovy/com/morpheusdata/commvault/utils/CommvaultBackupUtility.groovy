@@ -1,6 +1,7 @@
 package com.morpheusdata.commvault.utils
 
 import com.morpheusdata.core.util.HttpApiClient
+import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 import groovy.xml.XmlSlurper
@@ -39,6 +40,13 @@ class CommvaultBackupUtility {
 		}
 
 		return rtn
+	}
+
+	static getApiUrl(BackupProvider backupProvider) {
+		def scheme = backupProvider.host.contains("http") ? "" : "http://"
+		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
+
+		return apiUrl
 	}
 
 	// jobs
@@ -127,8 +135,9 @@ class CommvaultBackupUtility {
 	static listBackupSets(authConfig, opts){
 		def rtn = [success:true, backupSets: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
-		def query = ['clientId': opts.client.internalId]
+		def query = ['clientId': "${opts.internalId}"]
 		def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Backupset", authConfig.token, [format:'json', query: query], 'GET')
+		log.info("RAZI :: listBackupSets : results: ${results}")
 
 		rtn.success = results?.success
 		if(rtn.success == true) {
