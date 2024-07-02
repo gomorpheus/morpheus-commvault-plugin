@@ -10,7 +10,7 @@ import groovy.xml.XmlSlurper
 class CommvaultBackupUtility {
 
 	// backup servers
-	static listClients(authConfig, opts){
+	static listClients(authConfig){
 		def rtn = [success:true, clients: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		def query = ['PseudoClientType': 'VSPseudo'] // only list virtualization clients

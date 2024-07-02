@@ -1,6 +1,7 @@
 package com.morpheusdata.commvault
 
 import com.morpheusdata.commvault.sync.SubclientsSync
+import com.morpheusdata.commvault.sync.ClientSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.AbstractBackupProvider
@@ -374,8 +375,12 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 				log.debug("testResults: ${testResults}")
 				if (testResults.success == true) {
 					morpheus.async.backupProvider.updateStatus(backupProvider, 'ok', null).subscribe().dispose()
-					//cache info
+
 					def now = new Date().time
+					new ClientSync(morpheus, backupProvider, authConfig).execute()
+					log.debug("ClientSync in ${new Date().time - now}ms")
+          
+					now = new Date().time
 					new SubclientsSync(backupProvider, plugin).execute()
 					log.info("${backupProvider.name}: SubclientsSync in ${new Date().time - now}ms")
 
