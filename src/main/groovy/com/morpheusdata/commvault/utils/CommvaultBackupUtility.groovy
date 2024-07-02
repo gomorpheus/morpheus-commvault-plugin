@@ -57,12 +57,15 @@ class CommvaultBackupUtility {
 		log.info("RAZI :: opts: ${opts}")
 //		opts.clients.each { clientReferenceData ->
 		opts.each { clientReferenceData ->
-			def query = ['clientId': clientReferenceData.getConfigProperty("internalId")]
+			def query = ['clientId': "${clientReferenceData.getConfigProperty("internalId")}"]
 			def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Subclient", authConfig.token, [format:'json', query: query], 'GET')
+			log.info("RAZI :: listSubclients : results: ${results}")
 
 			rtn.success = results?.success
 			if(rtn.success == true) {
 				def response = new groovy.json.JsonSlurper().parseText(results.content)
+				log.info("RAZI :: subclients : response: ${response}")
+				log.info("RAZI :: subclients : response.subClientProperties: ${response.subClientProperties}")
 				response.subClientProperties.each { row ->
 					def rtnRow = [
 						internalId: row.subClientEntity.subclientId,
@@ -83,7 +86,9 @@ class CommvaultBackupUtility {
 					]
 
 					def subclientDetails = callApi(authConfig.apiUrl, "/SearchSvc/CVWebService.svc/Subclient/${row.subClientEntity.subclientId}", authConfig.token, [format:'json'], 'GET')
+					log.info("RAZI :: subclientDetails: ${subclientDetails}")
 					def subclientDetailsResults =  new groovy.json.JsonSlurper().parseText(subclientDetails.content).subClientProperties?.getAt(0)
+					log.info("RAZI :: subclientDetailsResults: ${subclientDetailsResults}")
 					rtnRow.storagePolicyId = subclientDetailsResults.commonProperties?.storageDevice?.dataBackupStoragePolicy?.storagePolicyId
 					rtnRow.storagePolicyName = subclientDetailsResults.commonProperties?.storageDevice?.dataBackupStoragePolicy?.storagePolicyName
 					rtnRow.backupsetId = subclientDetailsResults.subClientEntity?.backupsetId
@@ -650,6 +655,9 @@ class CommvaultBackupUtility {
 			requestOpts.headers = opts.headers.findAll {k, v -> v != null}
 			requestOpts.connectionTimeout = opts.connectTimeout
 			requestOpts.readTimeout = opts.readTimeout
+			requestOpts.queryParams = opts.query
+			log.info("RAZI :: requestOpts.queryParams: ${requestOpts.queryParams}")
+			log.info("RAZI :: opts.format: ${opts.format}")
 			if(opts.format == 'json') {
 				rtn = httpApiClient.callJsonApi(url, path, null, null, requestOpts, method)
 			} else if(opts.format == 'text/xml') {
@@ -666,8 +674,10 @@ class CommvaultBackupUtility {
 			} else {
 				rtn = httpApiClient.callXmlApi(url, path, null, null, requestOpts, method)
 			}
-			if(rtn.success == false && rtn.errorCode && !rtn.errorMessage) {
-				rtn.errorMessage = getApiResultsErrorMessage(rtn.data)
+			log.info("RAZI :: callApi : rtn: ${rtn}")
+//			if(rtn.success == false && rtn.errorCode && !rtn.errorMessage) {
+			if(rtn.success == false && rtn.errorCode && !rtn.errors) {
+				rtn.errors = getApiResultsErrorMessage(rtn.data)
 			} else if(rtn.success == false && !rtn.errorCode) {
 				// attempt to set the response error code and message
 				def responseError = getApiResultsError(rtn.data)
@@ -693,7 +703,8 @@ class CommvaultBackupUtility {
 				responseData = apiResults
 			}
 
-			rtn.errorMessage = getApiResultsErrorMessage(responseData)
+//			rtn.errorMessage = getApiResultsErrorMessage(responseData)
+			rtn.errors = getApiResultsErrorMessage(responseData)
 			rtn.errorCode = getApiResultsErrorCode(responseData)
 			rtn.success = true
 		} catch(Exception ex) {

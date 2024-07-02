@@ -1,8 +1,8 @@
 package com.morpheusdata.commvault
 
+import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
@@ -305,7 +305,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		def tokenResults = loginSession(opts.authConfig.apiUrl, opts.authConfig.username, opts.authConfig.password)
 		if(tokenResults.success == true) {
 			rtn.success = true
-			def token = tokenResults.tokenf
+			def token = tokenResults.token
 			def sessionId = tokenResults.sessionId
 			logoutSession(opts.authConfig.apiUrl, token)
 		} else {
@@ -318,25 +318,6 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		}
 		return rtn
 	}
-
-//	def getAuthConfig(BackupProvider backupProvider) {
-//		//credentials
-//		morpheus.async.accountCredential.loadCredentials(backupProvider)
-//		def rtn = [
-//				apiUrl:CommvaultBackupUtility.getApiUrl(backupProvider),
-//				username:backupProvider.credentialData?.username ?: backupProvider.username,
-//				password:backupProvider.credentialData?.password ?: backupProvider.password,
-//				basePath:apiBasePath
-//		]
-//		return rtn
-//	}
-
-//	def getApiUrl(BackupProvider backupProvider) {
-//		def scheme = backupProvider.host.contains("http") ? "" : "http://"
-//		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
-//
-//		return apiUrl
-//	}
 
 	def loginSession(String apiUrl, String username, String password) {
 		def rtn = [success: false]
@@ -382,7 +363,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		log.debug("refresh backup provider: {}", backupProvider)
 		ServiceResponse response = ServiceResponse.prepare()
 		try {
-			def authConfig = getAuthConfig(backupProvider)
+			def authConfig = plugin.getAuthConfig(backupProvider)
 			def apiOpts = [authConfig: authConfig]
 			def apiUrl = authConfig.apiUrl
 			def apiUrlObj = new URL(apiUrl)
@@ -396,6 +377,10 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 				if (testResults.success == true) {
 					morpheus.async.backupProvider.updateStatus(backupProvider, 'ok', null).subscribe().dispose()
 					//cache info
+					def now = new Date().time
+					new SubclientsSync(backupProvider, plugin).execute()
+					log.info("${backupProvider.name}: SubclientsSync in ${new Date().time - now}ms")
+
 					response.success = true
 				} else {
 					if (testResults.invalidLogin == true) {

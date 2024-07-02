@@ -19,11 +19,9 @@ import io.reactivex.rxjava3.core.Single
 class SubclientsSync {
     private CommvaultPlugin plugin
     private MorpheusContext morpheusContext
-    private CommvaultBackupProvider commvaultBackupProvider
     private BackupProvider backupProviderModel
 
-    public SubclientsSync(CommvaultBackupProvider commvaultBackupProvider, BackupProvider backupProviderModel, CommvaultPlugin plugin) {
-        this.commvaultBackupProvider = commvaultBackupProvider
+    SubclientsSync(BackupProvider backupProviderModel, CommvaultPlugin plugin) {
         this.backupProviderModel = backupProviderModel
         this.plugin = plugin
         this.morpheusContext = plugin.morpheusContext
@@ -33,11 +31,15 @@ class SubclientsSync {
         try {
             log.debug("SubclientsSync execute")
             Map authConfig = plugin.getAuthConfig(backupProviderModel)
+            log.info("RAZI :: backupProviderModel.account: ${backupProviderModel.account}")
+            log.info("RAZI :: backupProviderModel.account.id: ${backupProviderModel.account.id}")
+            log.info("RAZI :: category: ${backupProviderModel.type.code}.backup.backupServer.${backupProviderModel.id}")
             def refDataList = morpheusContext.async.referenceData.list(new DataQuery()
-                    .withFilter('account', backupProviderModel.account)
+                    .withFilter('account.id', backupProviderModel.account.id)
                     .withFilter('category', "${backupProviderModel.type.code}.backup.backupServer.${backupProviderModel.id}")
             ).toList().blockingGet()
             log.info("RAZI :: refDataList: ${refDataList}")
+            log.info("RAZI :: refDataList.size(): ${refDataList.size()}")
             def listResults = CommvaultBackupUtility.listSubclients(authConfig, refDataList)
             log.info("RAZI :: listResults: ${listResults}")
             if(listResults.success) {
@@ -132,9 +134,18 @@ class SubclientsSync {
         def objCategory = "commvault.job.${backupProviderModel.id}"
         log.info("RAZI :: objCategory: ${objCategory}")
         for(cloudItem in itemsToAdd) {
-            def addConfig = [account:backupProviderModel.account, backupProvider:backupProviderModel, code:objCategory + '.' + cloudItem.externalId,
-                             category:objCategory, name:cloudItem.name, externalId:cloudItem.externalId,
-                             source:'commvault', enabled: cloudItem.backupEnabled, internalId: cloudItem.internalId, enabled: true
+            def name = cloudItem.name == 'default' ? "${cloudItem.name}[${cloudItem.clientName}]" : cloudItem.name
+            def addConfig = [
+                    account         : backupProviderModel.account,
+                    backupProvider  : backupProviderModel,
+                    code            : objCategory + '.' + cloudItem.externalId,
+                    category        : objCategory,
+                    name            : name,
+                    externalId      : cloudItem.externalId,
+                    source          : 'commvault',
+                    enabled         : cloudItem.backupEnabled,
+                    internalId      : cloudItem.internalId,
+                    enabled         : true
             ]
             log.info("RAZI :: addConfig: ${addConfig}")
             def add = new BackupJob(addConfig)
