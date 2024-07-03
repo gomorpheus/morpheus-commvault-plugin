@@ -155,7 +155,7 @@ class CommvaultBackupUtility {
 		return rtn
 	}
 
-	static listStoragePolicies(authConfig, opts){
+	static listStoragePolicies(authConfig){
 		def rtn = [success:true, storagePolicies: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		def requestQuery = [:] //  [propertyLevel: 10] // include storage policy copies
