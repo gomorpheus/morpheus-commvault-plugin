@@ -10,7 +10,7 @@ import groovy.xml.XmlSlurper
 class CommvaultBackupUtility {
 
 	// backup servers
-	static listClients(authConfig, opts){
+	static listClients(authConfig){
 		def rtn = [success:true, clients: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		def query = ['PseudoClientType': 'VSPseudo'] // only list virtualization clients
@@ -53,8 +53,8 @@ class CommvaultBackupUtility {
 	static listSubclients(authConfig, opts){
 		def rtn = [success:true, subclients: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
-		opts.clients.each { clientReferenceData ->
-			def query = ['clientId': clientReferenceData.getConfigProperty("internalId")]
+		opts.each { clientReferenceData ->
+			def query = ['clientId': "${clientReferenceData.getConfigProperty("internalId")}"]
 			def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Subclient", authConfig.token, [format:'json', query: query], 'GET')
 
 			rtn.success = results?.success
@@ -137,7 +137,6 @@ class CommvaultBackupUtility {
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		def query = ['clientId': "${opts.internalId}"]
 		def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Backupset", authConfig.token, [format:'json', query: query], 'GET')
-		log.info("RAZI :: listBackupSets : results: ${results}")
 
 		rtn.success = results?.success
 		if(rtn.success == true) {
@@ -147,7 +146,7 @@ class CommvaultBackupUtility {
 					internalId: row.backupSetEntity.backupsetId,
 					externalId: row.backupSetEntity.backupsetId,
 					name: row.backupSetEntity.backupsetName,
-					clientId: opts.client.internalId
+					clientId: opts.internalId
 				] + row.backupSetEntity
 
 			}
@@ -648,6 +647,8 @@ class CommvaultBackupUtility {
 			requestOpts.headers = opts.headers.findAll {k, v -> v != null}
 			requestOpts.connectionTimeout = opts.connectTimeout
 			requestOpts.readTimeout = opts.readTimeout
+			requestOpts.queryParams = opts.query
+
 			if(opts.format == 'json') {
 				rtn = httpApiClient.callJsonApi(url, path, null, null, requestOpts, method)
 			} else if(opts.format == 'text/xml') {
@@ -664,8 +665,8 @@ class CommvaultBackupUtility {
 			} else {
 				rtn = httpApiClient.callXmlApi(url, path, null, null, requestOpts, method)
 			}
-			if(rtn.success == false && rtn.errorCode && !rtn.errorMessage) {
-				rtn.errorMessage = getApiResultsErrorMessage(rtn.data)
+			if(rtn.success == false && rtn.errorCode && !rtn.errors) {
+				rtn.errors = getApiResultsErrorMessage(rtn.data)
 			} else if(rtn.success == false && !rtn.errorCode) {
 				// attempt to set the response error code and message
 				def responseError = getApiResultsError(rtn.data)
@@ -691,7 +692,7 @@ class CommvaultBackupUtility {
 				responseData = apiResults
 			}
 
-			rtn.errorMessage = getApiResultsErrorMessage(responseData)
+			rtn.errors = getApiResultsErrorMessage(responseData)
 			rtn.errorCode = getApiResultsErrorCode(responseData)
 			rtn.success = true
 		} catch(Exception ex) {

@@ -1,9 +1,10 @@
 package com.morpheusdata.commvault
 
 import com.morpheusdata.commvault.sync.BackupSetsSync
+import com.morpheusdata.commvault.sync.SubclientsSync
+import com.morpheusdata.commvault.sync.ClientSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
@@ -21,8 +22,6 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	BackupJobProvider backupJobProvider;
 	private CommvaultPlugin plugin
-
-//	static apiBasePath = '/SearchSvc/CVWebService.svc'
 
 	CommvaultBackupProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
@@ -320,25 +319,6 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		return rtn
 	}
 
-//	def getAuthConfig(BackupProvider backupProvider) {
-//		//credentials
-//		morpheus.async.accountCredential.loadCredentials(backupProvider)
-//		def rtn = [
-//				apiUrl:getApiUrl(backupProvider),
-//				username:backupProvider.credentialData?.username ?: backupProvider.username,
-//				password:backupProvider.credentialData?.password ?: backupProvider.password,
-//				basePath:apiBasePath
-//		]
-//		return rtn
-//	}
-
-//	def getApiUrl(BackupProvider backupProvider) {
-//		def scheme = backupProvider.host.contains("http") ? "" : "http://"
-//		def apiUrl = "${scheme}${backupProvider.host}:${backupProvider.port}"
-//
-//		return apiUrl
-//	}
-
 	def loginSession(String apiUrl, String username, String password) {
 		def rtn = [success: false]
 		def response = CommvaultBackupUtility.getToken(apiUrl, username, password)
@@ -396,10 +376,19 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 				log.debug("testResults: ${testResults}")
 				if (testResults.success == true) {
 					morpheus.async.backupProvider.updateStatus(backupProvider, 'ok', null).subscribe().dispose()
-					//cache info
+
 					def now = new Date().time
+					new ClientSync(morpheus, backupProvider, authConfig).execute()
+					log.debug("ClientSync in ${new Date().time - now}ms")
+          
+					now = new Date().time
+					new SubclientsSync(backupProvider, plugin).execute()
+					log.info("${backupProvider.name}: SubclientsSync in ${new Date().time - now}ms")
+
+					now = new Date().time
 					new BackupSetsSync(backupProvider, plugin).execute()
 					log.info("${backupProvider.name}: BackupSetsSync in ${new Date().time - now}ms")
+
 					response.success = true
 				} else {
 					if (testResults.invalidLogin == true) {
