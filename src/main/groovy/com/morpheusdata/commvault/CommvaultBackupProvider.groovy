@@ -387,7 +387,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 					now = new Date().time
 					new StoragePoliciesSync(morpheus, backupProvider, authConfig).execute()
-					log.debug("StoragePoliciesSync in ${new Date().time - now}ms")
+					log.info("StoragePoliciesSync in ${new Date().time - now}ms")
 
 					response.success = true
 				} else {

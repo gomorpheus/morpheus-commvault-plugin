@@ -47,7 +47,7 @@ class StoragePoliciesSync {
                 syncTask.addMatchFunction { ReferenceDataSyncProjection domainObject, Map cloudItem ->
                     domainObject.externalId.toString() == cloudItem.externalId.toString()
                 }.onDelete { removeItems ->
-                    log.debug("onDelete removeItems:", removeItems.size())
+                    log.debug("removeItems:", removeItems.size())
                     morpheus.services.referenceData.bulkRemove(removeItems)
                 }.onAdd { itemsToAdd ->
                     addMissingStoragePolicies(itemsToAdd)
@@ -91,7 +91,7 @@ class StoragePoliciesSync {
                 morpheus.services.referenceData.bulkCreate(policyAdds)
             }
         } catch (e) {
-            log.error "Error in adding addMissingStoragePolicies ${e}", e
+            log.error "Error in addMissingStoragePolicies ${e}", e
         }
     }
 
