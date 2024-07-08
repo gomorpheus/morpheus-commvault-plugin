@@ -1,6 +1,7 @@
 package com.morpheusdata.commvault
 
 import com.morpheusdata.commvault.sync.StoragePoliciesSync
+import com.morpheusdata.commvault.sync.BackupSetsSync
 import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.sync.ClientSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
@@ -388,6 +389,10 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 					now = new Date().time
 					new StoragePoliciesSync(morpheus, backupProvider, authConfig).execute()
 					log.info("StoragePoliciesSync in ${new Date().time - now}ms")
+
+					now = new Date().time
+					new BackupSetsSync(backupProvider, plugin).execute()
+					log.info("${backupProvider.name}: BackupSetsSync in ${new Date().time - now}ms")
 
 					response.success = true
 				} else {
