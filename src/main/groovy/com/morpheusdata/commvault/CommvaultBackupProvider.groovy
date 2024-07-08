@@ -350,7 +350,37 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	ServiceResponse deleteBackupProvider(BackupProviderModel backupProviderModel, Map opts) {
-		return ServiceResponse.success()
+		log.debug("deleteBackupProvider: ${backupProviderModel}, ${opts}")
+		def rtn = [success: true, data:backupProviderModel]
+		// TODO: clearClients method will be implemented in coming sprint
+//		def cleanBackupServersResults = clearClients(backupProviderModel, opts)
+		def cleanBackupServersResults = [success: true]
+		if(!cleanBackupServersResults.success) {
+			rtn.success = false
+			rtn.msg = cleanBackupServersResults.msg
+		}
+
+		if(rtn.success) {
+			// TODO: clearBackupSets method will be implemented in coming sprint
+//			def cleanBackupsetResults = clearBackupSets(backupProviderModel, opts)
+			def cleanBackupsetResults = [success: true]
+			if(!cleanBackupsetResults.success) {
+				rtn.success = false
+				rtn.msg = cleanBackupsetResults.msg
+			}
+		}
+
+		if(rtn.success) {
+			// TODO: clearStoragePolicies method will be implemented in coming sprint
+//			def cleanStoragePolicyResults = clearStoragePolicies(backupProviderModel, opts)
+			def cleanStoragePolicyResults = [success: true]
+			if(!cleanStoragePolicyResults.success) {
+				rtn.success = false
+				rtn.msg = cleanStoragePolicyResults.msg
+			}
+		}
+
+		return ServiceResponse.create(rtn)
 	}
 
 	/**
