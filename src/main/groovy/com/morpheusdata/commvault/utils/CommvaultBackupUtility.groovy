@@ -135,7 +135,7 @@ class CommvaultBackupUtility {
 	static listBackupSets(authConfig, opts){
 		def rtn = [success:true, backupSets: []]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
-		def query = ['clientId': opts.client.internalId]
+		def query = ['clientId': "${opts.internalId}"]
 		def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Backupset", authConfig.token, [format:'json', query: query], 'GET')
 
 		rtn.success = results?.success
@@ -146,7 +146,7 @@ class CommvaultBackupUtility {
 					internalId: row.backupSetEntity.backupsetId,
 					externalId: row.backupSetEntity.backupsetId,
 					name: row.backupSetEntity.backupsetName,
-					clientId: opts.client.internalId
+					clientId: opts.internalId
 				] + row.backupSetEntity
 
 			}
