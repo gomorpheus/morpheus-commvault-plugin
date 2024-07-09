@@ -74,7 +74,10 @@ class SubclientsSync {
             BackupJob existingItem = update.existingItem
 
             Boolean doSave = false
+            log.info("RAZI :: masterItem.name: ${masterItem.name}")
+            log.info("RAZI :: existingItem.account.id: ${existingItem.account.id}")
             def jobName = masterItem.name.replace("-${existingItem.account.id}", "")
+            log.info("RAZI :: jobName: ${jobName}")
             if (existingItem.name != jobName) {
                 existingItem.name = jobName
                 doSave = true
@@ -100,6 +103,7 @@ class SubclientsSync {
                 doSave = true
             }
 
+            log.info "RAZI :: updating subclients!! ${existingItem.name}"
             if (doSave == true) {
                 log.debug "updating subclients!! ${existingItem.name}"
                 morpheusContext.async.backupJob.save(existingItem).blockingGet()
