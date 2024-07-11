@@ -1,14 +1,15 @@
 package com.morpheusdata.commvault
 
-import com.morpheusdata.commvault.sync.StoragePoliciesSync
 import com.morpheusdata.commvault.sync.BackupSetsSync
-import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.sync.ClientSync
+import com.morpheusdata.commvault.sync.StoragePoliciesSync
+import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
+import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.util.ConnectionUtils
 import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.BackupProvider as BackupProviderModel
@@ -352,9 +353,9 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	ServiceResponse deleteBackupProvider(BackupProviderModel backupProviderModel, Map opts) {
 		log.debug("deleteBackupProvider: ${backupProviderModel}, ${opts}")
 		def rtn = [success: true, data:backupProviderModel]
-		// TODO: clearClients method will be implemented in coming sprint
-//		def cleanBackupServersResults = clearClients(backupProviderModel, opts)
-		def cleanBackupServersResults = [success: true]
+		log.info("RAZI :: clearClients -> calling")
+		def cleanBackupServersResults = clearClients(backupProviderModel, opts)
+		log.info("RAZI :: cleanBackupServersResults: ${cleanBackupServersResults}")
 		if(!cleanBackupServersResults.success) {
 			rtn.success = false
 			rtn.msg = cleanBackupServersResults.msg
@@ -362,8 +363,10 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 		if(rtn.success) {
 			// TODO: clearBackupSets method will be implemented in coming sprint
-//			def cleanBackupsetResults = clearBackupSets(backupProviderModel, opts)
-			def cleanBackupsetResults = [success: true]
+            log.info("RAZI :: clearBackupSets -> calling")
+			def cleanBackupsetResults = clearBackupSets(backupProviderModel, opts)
+            log.info("RAZI :: cleanBackupsetResults: ${cleanBackupsetResults}")
+//			def cleanBackupsetResults = [success: true]
 			if(!cleanBackupsetResults.success) {
 				rtn.success = false
 				rtn.msg = cleanBackupsetResults.msg
@@ -372,8 +375,10 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 		if(rtn.success) {
 			// TODO: clearStoragePolicies method will be implemented in coming sprint
-//			def cleanStoragePolicyResults = clearStoragePolicies(backupProviderModel, opts)
-			def cleanStoragePolicyResults = [success: true]
+			log.info("RAZI :: clearStoragePolicies -> calling")
+			def cleanStoragePolicyResults = clearStoragePolicies(backupProviderModel, opts)
+			log.info("RAZI :: cleanStoragePolicyResults: ${cleanStoragePolicyResults}")
+//			def cleanStoragePolicyResults = [success: true]
 			if(!cleanStoragePolicyResults.success) {
 				rtn.success = false
 				rtn.msg = cleanStoragePolicyResults.msg
@@ -381,6 +386,70 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		}
 
 		return ServiceResponse.create(rtn)
+	}
+
+	def clearClients(BackupProviderModel backupProviderModel, Map opts=[:]) {
+		def rtn = [success: true]
+		try {
+			def objCategory = "${backupProviderModel.type.code}.backup.backupServer.${backupProviderModel.id}"
+			log.info("RAZI :: clearClients -> account.id: ${backupProviderModel.account.id}")
+			log.info("RAZI :: clearClients -> objCategory: ${objCategory}")
+			def removeItems = morpheus.services.referenceData.list(new DataQuery()
+					.withFilter("account.id", backupProviderModel.account.id)
+					.withFilter("catagory", objCategory)
+			)
+			log.info("RAZI :: clearClients -> removeItems: ${removeItems}")
+			morpheus.services.referenceData.bulkRemove(removeItems)
+			log.info("RAZI :: clearClients -> SUCCESS")
+		} catch (Exception e) {
+			log.error("Error removing backup servers for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+			rtn.msg = "Error removing backup servers: ${e}"
+			rtn.success = false
+		}
+		return rtn
+	}
+
+    def clearBackupSets(BackupProviderModel backupProviderModel, Map opts=[:]) {
+        def rtn = [success: true]
+        try {
+            def objCategory = "${backupProviderModel.type.code}.backup.backupSet.${backupProviderModel.id}.%"
+            log.info("RAZI :: clearBackupSets -> objCategory: ${objCategory}")
+            log.info("RAZI :: clearBackupSets -> account.id: ${backupProviderModel.account.id}")
+            def removeItems = morpheus.services.referenceData.list(new DataQuery()
+                    .withFilter("account.id", backupProviderModel.account.id)
+                    .withFilter("category", "=~", objCategory)
+            )
+            log.info("RAZI :: clearBackupSets -> removeItems: ${removeItems}")
+            morpheus.services.referenceData.bulkRemove(removeItems)
+            log.info("RAZI :: clearBackupSets -> clearBackupSets -> SUCCESS")
+//            ReferenceData.where { account == backupProvider.account && category =~ objCategory }.deleteAll()
+        } catch (Exception e) {
+            log.error("Error removing storage policies for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+            rtn.msg = "Error removing storage policies: ${e}"
+            rtn.success = false
+        }
+        return rtn
+    }
+
+	def clearStoragePolicies(BackupProviderModel backupProviderModel, Map opts=[:]) {
+		def rtn = [success: true]
+		try {
+			def objCategory = "${backupProviderModel.type.code}.backup.storagePolicy.${backupProviderModel.id}"
+			log.info("RAZI :: clearStoragePolicies -> account.id: ${backupProviderModel.account.id}")
+			log.info("RAZI :: clearStoragePolicies -> objCategory: ${objCategory}")
+			def removeItems = morpheus.services.referenceData.list(new DataQuery()
+					.withFilter("account.id", backupProviderModel.account.id)
+					.withFilter("category",  objCategory)
+			)
+			log.info("RAZI :: clearStoragePolicies -> removeItems: ${removeItems}")
+			morpheus.services.referenceData.bulkRemove(removeItems)
+			log.info("RAZI :: clearStoragePolicies -> SUCCESS")
+		} catch (Exception e) {
+			log.error("Error removing storage policies for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+			rtn.msg = "Error removing storage policies: ${e}"
+			rtn.success = false
+		}
+		return rtn
 	}
 
 	/**
