@@ -1,9 +1,9 @@
 package com.morpheusdata.commvault
 
-import com.morpheusdata.commvault.sync.StoragePoliciesSync
 import com.morpheusdata.commvault.sync.BackupSetsSync
-import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.sync.ClientSync
+import com.morpheusdata.commvault.sync.StoragePoliciesSync
+import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.AbstractBackupProvider
@@ -353,9 +353,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	ServiceResponse deleteBackupProvider(BackupProviderModel backupProviderModel, Map opts) {
 		log.debug("deleteBackupProvider: ${backupProviderModel}, ${opts}")
 		def rtn = [success: true, data:backupProviderModel]
-		// TODO: clearClients method will be implemented in coming sprint
-//		def cleanBackupServersResults = clearClients(backupProviderModel, opts)
-		def cleanBackupServersResults = [success: true]
+		def cleanBackupServersResults = clearClients(backupProviderModel, opts)
 		if(!cleanBackupServersResults.success) {
 			rtn.success = false
 			rtn.msg = cleanBackupServersResults.msg
@@ -394,6 +392,23 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		} catch (Exception e) {
 			log.error("Error removing storage policies for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
 			rtn.msg = "Error removing storage policies: ${e}"
+			rtn.success = false
+		}
+		return rtn
+	}
+  
+	def clearClients(BackupProviderModel backupProviderModel, Map opts=[:]) {
+		def rtn = [success: true]
+		try {
+			def objCategory = "${backupProviderModel.type.code}.backup.backupServer.${backupProviderModel.id}"
+			def removeItems = morpheus.services.referenceData.list(new DataQuery()
+					.withFilter("account.id", backupProviderModel.account.id)
+					.withFilter("catagory", objCategory)
+			)
+			morpheus.services.referenceData.bulkRemove(removeItems)
+		} catch (Exception e) {
+			log.error("Error removing backup servers for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+			rtn.msg = "Error removing backup servers: ${e}"
 			rtn.success = false
 		}
 		return rtn
