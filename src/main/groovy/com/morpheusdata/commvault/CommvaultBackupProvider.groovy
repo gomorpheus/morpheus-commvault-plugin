@@ -9,6 +9,7 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
+import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.util.ConnectionUtils
 import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.BackupProvider as BackupProviderModel
@@ -361,9 +362,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		}
 
 		if(rtn.success) {
-			// TODO: clearBackupSets method will be implemented in coming sprint
-//			def cleanBackupsetResults = clearBackupSets(backupProviderModel, opts)
-			def cleanBackupsetResults = [success: true]
+			def cleanBackupsetResults = clearBackupSets(backupProviderModel, opts)
 			if(!cleanBackupsetResults.success) {
 				rtn.success = false
 				rtn.msg = cleanBackupsetResults.msg
@@ -381,6 +380,23 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		}
 
 		return ServiceResponse.create(rtn)
+	}
+
+	def clearBackupSets(BackupProviderModel backupProviderModel, Map opts=[:]) {
+		def rtn = [success: true]
+		try {
+			def objCategory = "${backupProviderModel.type.code}.backup.backupSet.${backupProviderModel.id}.%"
+			def removeItems = morpheus.services.referenceData.list(new DataQuery()
+					.withFilter("account.id", backupProviderModel.account.id)
+					.withFilter("category", "=~", objCategory)
+			)
+			morpheus.services.referenceData.bulkRemove(removeItems)
+		} catch (Exception e) {
+			log.error("Error removing storage policies for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+			rtn.msg = "Error removing storage policies: ${e}"
+			rtn.success = false
+		}
+		return rtn
 	}
 
 	/**
