@@ -5,7 +5,10 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
+import com.morpheusdata.core.backup.util.BackupResultUtility
 import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.core.util.ComputeUtility
+import com.morpheusdata.core.util.DateUtility
 import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupJob
 import com.morpheusdata.model.BackupProvider
@@ -221,9 +224,9 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					.withFilter("internalId", storagePolicyId))
 //			def container = Container.get(backup.containerId)
 			Workload workload = morpheus.services.workload.get(backup.containerId)
-//			def server = workload.server
+			def server = workload.server
 //			def server = container.server
-			ComputeServer server = morpheus.services.computeServer.get(workload.server.id)
+//			ComputeServer server = morpheus.services.computeServer.get(workload.server.id)
 			rtn = CommvaultBackupUtility.createSubclient(authConfig, client.name, "${backup.name}-cvvm", [backupSet: backupSet, storagePolicy: storagePolicy])
 			if(rtn.success && rtn?.subclientId) {
 				def subclientResult = CommvaultBackupUtility.getSubclient(authConfig, rtn.subclientId)
@@ -261,7 +264,8 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	private saveBackupResult(Backup backup, Map opts = [:]) {
 		def status = opts.result ? getBackupStatus(opts.result) : "IN_PROGRESS"
 		long sizeInMb = (opts.totalSize ?: 0) / 1048576
-		opts.backupSetId = opts.backupSetId ?: createBackupResultSetId()
+//		opts.backupSetId = opts.backupSetId ?: createBackupResultSetId()
+		opts.backupSetId = opts.backupSetId ?: BackupResultUtility.generateBackupResultSetId()
 
 		def statusMap = [
 				backupResultId: opts.backupResult.id,
@@ -271,22 +275,23 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				backupSizeInMb: sizeInMb,
 				externalId: opts.backupJobId,
 				config: [
-						accountId:backup.account.id,
-						backupId:backup.id,
-						backupName:backup.name,
-						backupType:backup.backupType.code,
-						serverId:backup.serverId,
-						active:true,
-						containerId:backup.containerId,
-						instanceId:backup.instanceId,
-						containerTypeId:backup.containerTypeId,
-						restoreType:backup.backupType.restoreType,
-						startDay:new Date().clearTime(),
-						startDate:new Date(),
-						id:createBackupResultId(),
-						backupSetId:opts.backupSetId,
-						backupSessionId:opts.backupSessionId,
-						backupJobId: opts.backupJobId
+						accountId		: backup.account.id,
+						backupId		: backup.id,
+						backupName		: backup.name,
+						backupType		: backup.backupType.code,
+						serverId		: backup.serverId,
+						active			: true,
+						containerId		: backup.containerId,
+						instanceId		: backup.instanceId,
+						containerTypeId	: backup.containerTypeId,
+						restoreType		: backup.backupType.restoreType,
+						startDay		: new Date().clearTime(),
+						startDate		: new Date(),
+//						id:createBackupResultId(),
+						id 				: BackupResultUtility.generateBackupResultSetId(),
+						backupSetId		: opts.backupSetId,
+						backupSessionId	: opts.backupSessionId,
+						backupJobId		: opts.backupJobId
 				]
 		]
 		if(opts.error) {
@@ -321,7 +326,13 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	@Override
 	ServiceResponse<BackupExecutionResponse> executeBackup(Backup backup, BackupResult backupResult, Map executionConfig, Cloud cloud, ComputeServer computeServer, Map opts) {
 		log.debug("executeBackup: {}", backup)
+		log.info("RAZI :: backup: ${backup}")
+		log.info("RAZI :: backupResult: ${backupResult}")
+		log.info("RAZI :: executionConfig: ${executionConfig}")
+		log.info("RAZI :: opts: ${opts}")
 		ServiceResponse<BackupExecutionResponse> rtn = ServiceResponse.prepare(new BackupExecutionResponse(backupResult))
+		log.info("RAZI :: executeBackup -> rtn: ${rtn}")
+		log.info("RAZI :: !isCommvaultEnabled(backup): ${!isCommvaultEnabled(backup)}")
 		if(!isCommvaultEnabled(backup)) {
 //			return ServiceResponse.error("Commvault backup integration is disabled")
 			rtn.error = "Commvault backup integration is disabled"
@@ -334,10 +345,13 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 			def authConfig = plugin.getAuthConfig(backupProvider)
 			if(authConfig) {
 				def subclientId = backup.getConfigProperty("vmSubclientId")
+				log.info("RAZI :: subclientId -> before if(!subclientId): ${subclientId}")
 				if(!subclientId) {
 					def vmSubclientResults = initializeVmSubclient(backup, opts)
+					log.info("RAZI :: vmSubclientResults: ${vmSubclientResults}")
 					if(vmSubclientResults.success) {
 						subclientId = backup.getConfigProperty("vmSubclientId")
+						log.info("RAZI :: subclientId -> inside if(!subclientId): ${subclientId}")
 					} else {
 //						return ServiceResponse.error("Unable to execute backup ${backup.id}: Failed to create commvault subclient.")
 						rtn.error = "Unable to execute backup ${backup.id}: Failed to create commvault subclient."
@@ -345,15 +359,17 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					}
 				}
 				results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
+				log.info("RAZI :: executeBackup -> results: ${results}")
 
 				if(!results.success) {
 					if(results.errorCode == 2) {
 						def backupConfigMap = backup.getConfigMap()
+						log.info("RAZI :: backupConfigMap: ${backupConfigMap}")
 						if(backupConfigMap) {
+							def backupResponce = captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
+							log.info("RAZI :: backupResponce: ${backupResponce}")
 //							return captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
-							captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
-							rtn.success = true
-							return rtn
+							return backupResponce
 						}
 						if(!results.backupJobId) {
 //							return ServiceResponse.error("Failed to capture active id for backup job ${backup.id.id}")
@@ -363,21 +379,45 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					} else {
 						log.error("Failed to execute backup ${backup.id}")
 //						return ServiceResponse.error("Failed to execute backup job ${backup.id}", results)
+//						rtn = results
+                        log.info("RAZI :: results : if(results.errorCode == 2) -> else: ${results}")
 						rtn.error = "Failed to execute backup job ${backup.id}"
 						return rtn
 					}
-					saveBackupResult(backup, results + [backupResult: backupConfig.backupResult, result: "FAILED"])
+//					saveBackupResult(backup, results + [backupResult: backupConfig.backupResult, result: "FAILED"])
+					rtn.data.backupResult.status = BackupResult.Status.FAILED
+					rtn.data.updates = true
 
 				} else {
-					saveBackupResult(backup, results + [backupResult: backupConfig.backupResult])
+//					saveBackupResult(backup, results + [backupResult: backupConfig.backupResult])
+					rtn.success = true
+//					rtn.data.backupResult.snapshotId = snapshotResults.snapshotId
+//					rtn.data.backupResult.externalId = snapshotResults.snapshotId
+//					rtn.data.backupResult.setConfigProperty("vmId", snapshotResults.externalId)
+//					rtn.data.backupResult.sizeInMb = (saveResults.archiveSize ?: 1) / ComputeUtility.ONE_MEGABYTE
+					rtn.data.backupResult.sizeInMb = (results.totalSize ?: 0) / ComputeUtility.ONE_MEGABYTE
+					rtn.data.backupResult.status = BackupResult.Status.SUCCEEDED
+					rtn.data.updates = true
+					if(!backupResult.endDate) {
+						rtn.data.backupResult.endDate = new Date()
+						def startDate = backupResult.startDate
+						if(startDate) {
+							def start = DateUtility.parseDate(startDate)
+							def end = rtn.data.backupResult.endDate
+							rtn.data.backupResult.durationMillis = end.time - start.time
+						}
+					}
 
 				}
 			}
 		} catch(e) {
 			log.error("executeBackup error: ${e}", e)
+			rtn.data.backupResult.status = BackupResult.Status.FAILED
+			rtn.data.updates = true
 		}
 
 //		return ServiceResponse.success(results)
+		log.info("RAZI :: executeBackup -> END rtn: ${rtn}")
 		return rtn
 	}
 
