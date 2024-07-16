@@ -1,14 +1,15 @@
 package com.morpheusdata.commvault
 
-import com.morpheusdata.commvault.sync.StoragePoliciesSync
 import com.morpheusdata.commvault.sync.BackupSetsSync
-import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.sync.ClientSync
+import com.morpheusdata.commvault.sync.StoragePoliciesSync
+import com.morpheusdata.commvault.sync.SubclientsSync
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.DefaultBackupJobProvider
+import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.util.ConnectionUtils
 import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.BackupProvider as BackupProviderModel
@@ -352,18 +353,14 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	ServiceResponse deleteBackupProvider(BackupProviderModel backupProviderModel, Map opts) {
 		log.debug("deleteBackupProvider: ${backupProviderModel}, ${opts}")
 		def rtn = [success: true, data:backupProviderModel]
-		// TODO: clearClients method will be implemented in coming sprint
-//		def cleanBackupServersResults = clearClients(backupProviderModel, opts)
-		def cleanBackupServersResults = [success: true]
+		def cleanBackupServersResults = clearClients(backupProviderModel, opts)
 		if(!cleanBackupServersResults.success) {
 			rtn.success = false
 			rtn.msg = cleanBackupServersResults.msg
 		}
 
 		if(rtn.success) {
-			// TODO: clearBackupSets method will be implemented in coming sprint
-//			def cleanBackupsetResults = clearBackupSets(backupProviderModel, opts)
-			def cleanBackupsetResults = [success: true]
+			def cleanBackupsetResults = clearBackupSets(backupProviderModel, opts)
 			if(!cleanBackupsetResults.success) {
 				rtn.success = false
 				rtn.msg = cleanBackupsetResults.msg
@@ -371,9 +368,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		}
 
 		if(rtn.success) {
-			// TODO: clearStoragePolicies method will be implemented in coming sprint
-//			def cleanStoragePolicyResults = clearStoragePolicies(backupProviderModel, opts)
-			def cleanStoragePolicyResults = [success: true]
+			def cleanStoragePolicyResults = clearStoragePolicies(backupProviderModel, opts)
 			if(!cleanStoragePolicyResults.success) {
 				rtn.success = false
 				rtn.msg = cleanStoragePolicyResults.msg
@@ -381,6 +376,57 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		}
 
 		return ServiceResponse.create(rtn)
+	}
+
+	def clearStoragePolicies(BackupProviderModel backupProviderModel, Map opts=[:]) {
+		def rtn = [success: true]
+		try {
+			def objCategory = "${backupProviderModel.type.code}.backup.storagePolicy.${backupProviderModel.id}"
+			def removeItems = morpheus.services.referenceData.list(new DataQuery()
+					.withFilter("account.id", backupProviderModel.account.id)
+					.withFilter("category",  objCategory)
+			)
+			morpheus.services.referenceData.bulkRemove(removeItems)
+		} catch (Exception e) {
+			log.error("Error removing storage policies for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+			rtn.msg = "Error removing storage policies: ${e}"
+			rtn.success = false
+		}
+		return rtn
+	}
+
+	def clearBackupSets(BackupProviderModel backupProviderModel, Map opts=[:]) {
+		def rtn = [success: true]
+		try {
+			def objCategory = "${backupProviderModel.type.code}.backup.backupSet.${backupProviderModel.id}.%"
+			def removeItems = morpheus.services.referenceData.list(new DataQuery()
+					.withFilter("account.id", backupProviderModel.account.id)
+					.withFilter("category", "=~", objCategory)
+			)
+			morpheus.services.referenceData.bulkRemove(removeItems)
+		} catch (Exception e) {
+			log.error("Error removing storage policies for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+			rtn.msg = "Error removing storage policies: ${e}"
+			rtn.success = false
+		}
+		return rtn
+	}
+  
+	def clearClients(BackupProviderModel backupProviderModel, Map opts=[:]) {
+		def rtn = [success: true]
+		try {
+			def objCategory = "${backupProviderModel.type.code}.backup.backupServer.${backupProviderModel.id}"
+			def removeItems = morpheus.services.referenceData.list(new DataQuery()
+					.withFilter("account.id", backupProviderModel.account.id)
+					.withFilter("catagory", objCategory)
+			)
+			morpheus.services.referenceData.bulkRemove(removeItems)
+		} catch (Exception e) {
+			log.error("Error removing backup servers for backup provider {}[{}]", backupProviderModel.name, backupProviderModel.id)
+			rtn.msg = "Error removing backup servers: ${e}"
+			rtn.success = false
+		}
+		return rtn
 	}
 
 	/**
