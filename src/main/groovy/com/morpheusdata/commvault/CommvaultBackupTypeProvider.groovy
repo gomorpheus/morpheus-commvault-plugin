@@ -152,7 +152,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	CommvaultBackupExecutionProvider getExecutionProvider() {
 		if(!this.executionProvider) {
-			this.executionProvider = new CommvaultBackupExecutionProvider(getPlugin())
+			this.executionProvider = new CommvaultBackupExecutionProvider(getPlugin(), getMorpheus())
 		}
 		return this.executionProvider
 	}
