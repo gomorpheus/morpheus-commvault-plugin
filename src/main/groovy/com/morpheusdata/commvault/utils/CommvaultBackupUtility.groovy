@@ -234,9 +234,9 @@ class CommvaultBackupUtility {
 			def response = new groovy.json.JsonSlurper().parseText(results.content)
 			if(!response.errorCode) {
 				rtn.subclient = response.subClientProperties?.getAt(0)
-				rtn.statusCode = results.statusCode
+				//rtn.statusCode = results.statusCode
 			} else {
-				rtn.statusCode = results.errorCode
+				//rtn.statusCode = results.errorCode
 				rtn.errorCode = response.errorCode
 				rtn.success = false
 				rtn.msg = response.errorMessage

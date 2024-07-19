@@ -22,7 +22,7 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class CommvaultBackupProvider extends AbstractBackupProvider {
 
-	BackupJobProvider backupJobProvider;
+	CommvaultBackupJobProvider backupJobProvider;
 	private CommvaultPlugin plugin
 
 	CommvaultBackupProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
@@ -234,7 +234,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		// scheduling and execution of the jobs. Replace the default job provider
 		// if jobs are to be managed on the external backup system.
 		if(!this.backupJobProvider) {
-			this.backupJobProvider = new DefaultBackupJobProvider(getPlugin(), morpheus);
+			this.backupJobProvider = new CommvaultBackupJobProvider(plugin, morpheus)
 		}
 		return this.backupJobProvider
 	}

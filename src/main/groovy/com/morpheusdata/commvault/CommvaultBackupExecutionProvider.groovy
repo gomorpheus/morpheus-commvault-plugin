@@ -1,7 +1,7 @@
 package com.morpheusdata.commvault
 
+import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
 import com.morpheusdata.model.Backup
@@ -14,10 +14,10 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 
-	Plugin plugin
+	private CommvaultPlugin plugin
 	MorpheusContext morpheusContext
 
-	CommvaultBackupExecutionProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	CommvaultBackupExecutionProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		this.plugin = plugin
 		this.morpheusContext = morpheusContext
 	}
@@ -41,6 +41,10 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse configureBackup(Backup backup, Map config, Map opts) {
+		log.debug("configureBackup: {}, {}, {}", backup, config, opts)
+		if(config.commvaultClient) {
+			backup.setConfigProperty("commvaultClientId", config.commvaultClient)
+		}
 		return ServiceResponse.success(backup)
 	}
 
@@ -71,7 +75,33 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse createBackup(Backup backup, Map opts) {
-		return ServiceResponse.success()
+		log.debug("createBackup {}:{} to job {} with opts: {}", backup.id, backup.name, backup.backupJob.id, opts)
+		ServiceResponse rtn = ServiceResponse.prepare()
+		try {
+			def backupProvider = backup.backupProvider
+			def authConfig = plugin.getAuthConfig(backupProvider)
+			def backupJob = backup.backupJob
+			def server
+			if(backup.computeServerId) {
+				server = morpheusContext.services.computeServer.get(backup.computeServerId)
+			} else {
+				def workload = morpheusContext.services.workload.get(backup.containerId)
+				server = morpheusContext.services.computeServer.get(workload?.server.id)
+			}
+			if(server) {
+				def subClientId = backupJob.internalId
+				def vmClientId = (server.internalId ?: server.externalId) // use vmware internal ID, move this to the backup type service when split out.
+				def vmClientName = server.name + "_" + server.externalId
+				def results = CommvaultBackupUtility.addVMToSubclient(authConfig, subClientId, vmClientId, vmClientName)
+				log.debug("results: ${results}")
+				if (results.success == true) {
+					rtn.success = true
+				}
+			}
+		} catch(e) {
+			log.error("createBackup error: ${e}", e)
+		}
+		return rtn
 	}
 
 	/**
