@@ -234,9 +234,9 @@ class CommvaultBackupUtility {
 			def response = new groovy.json.JsonSlurper().parseText(results.content)
 			if(!response.errorCode) {
 				rtn.subclient = response.subClientProperties?.getAt(0)
-				rtn.statusCode = results.statusCode
+				//rtn.statusCode = results.statusCode
 			} else {
-				rtn.statusCode = results.errorCode
+				//rtn.statusCode = results.errorCode
 				rtn.errorCode = response.errorCode
 				rtn.success = false
 				rtn.msg = response.errorMessage
@@ -326,11 +326,15 @@ class CommvaultBackupUtility {
 	static backupSubclient(authConfig, subclientId){
 		def rtn = [success:true]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
+		log.info("RAZI :: authConfig.token: ${authConfig.token}")
 		def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Subclient/${subclientId}/action/backup", authConfig.token, [format:'json'], 'POST')
+		log.info("RAZI :: backupSubclient -> results: ${results.toString()}")
 		log.debug("got: ${results}")
 
+		log.info("RAZI :: backupSubclient -> results?.success: ${results?.success}")
 		rtn.success = results?.success
 		if(rtn.success == true) {
+			log.info("RAZI :: backupSubclient -> results.content: ${results.content}")
 			def response = new groovy.json.JsonSlurper().parseText(results.content)
 			if(response.errorCode && response.errorCode != 0) {
 				rtn.success = false

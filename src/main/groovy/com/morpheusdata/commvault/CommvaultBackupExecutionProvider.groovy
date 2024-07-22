@@ -2,7 +2,6 @@ package com.morpheusdata.commvault
 
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
 import com.morpheusdata.core.backup.util.BackupResultUtility
@@ -23,7 +22,7 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 
-	CommvaultPlugin plugin
+	private CommvaultPlugin plugin
 	MorpheusContext morpheusContext
 
 	CommvaultBackupExecutionProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
@@ -50,6 +49,10 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse configureBackup(Backup backup, Map config, Map opts) {
+		log.debug("configureBackup: {}, {}, {}", backup, config, opts)
+		if(config.commvaultClient) {
+			backup.setConfigProperty("commvaultClientId", config.commvaultClient)
+		}
 		return ServiceResponse.success(backup)
 	}
 
@@ -80,7 +83,33 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse createBackup(Backup backup, Map opts) {
-		return ServiceResponse.success()
+		log.debug("createBackup {}:{} to job {} with opts: {}", backup.id, backup.name, backup.backupJob.id, opts)
+		ServiceResponse rtn = ServiceResponse.prepare()
+		try {
+			def backupProvider = backup.backupProvider
+			def authConfig = plugin.getAuthConfig(backupProvider)
+			def backupJob = backup.backupJob
+			def server
+			if(backup.computeServerId) {
+				server = morpheusContext.services.computeServer.get(backup.computeServerId)
+			} else {
+				def workload = morpheusContext.services.workload.get(backup.containerId)
+				server = morpheusContext.services.computeServer.get(workload?.server.id)
+			}
+			if(server) {
+				def subClientId = backupJob.internalId
+				def vmClientId = (server.internalId ?: server.externalId) // use vmware internal ID, move this to the backup type service when split out.
+				def vmClientName = server.name + "_" + server.externalId
+				def results = CommvaultBackupUtility.addVMToSubclient(authConfig, subClientId, vmClientId, vmClientName)
+				log.debug("results: ${results}")
+				if (results.success == true) {
+					rtn.success = true
+				}
+			}
+		} catch(e) {
+			log.error("createBackup error: ${e}", e)
+		}
+		return rtn
 	}
 
 	/**
@@ -204,36 +233,61 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 		def rtn = [success:false]
 		try {
 			def backupProvider = getBackupProvider(backup)
+			log.info("RAZI :: initializeVmSubclient -> backupProvider: ${backupProvider}")
 			def authConfig = plugin.getAuthConfig(backupProvider)
+			log.info("RAZI :: initializeVmSubclient -> authConfig: ${authConfig}")
 			def jobConfig = backup.backupJob.getConfigMap()
+			log.info("RAZI :: initializeVmSubclient -> jobConfig: ${jobConfig}")
 			def clientId = jobConfig.clientId
+			log.info("RAZI :: initializeVmSubclient -> clientId: ${clientId}")
 			def storagePolicyId = jobConfig.storagePolicyId ?: getStoragePolicyId(authConfig, backup.backupJob).storagePolicyId
+			log.info("RAZI :: initializeVmSubclient -> storagePolicyId: ${storagePolicyId}")
 			def backupSetId = jobConfig.backupsetId ?: getBackupsetId(authConfig, backup.backupJob).backupsetId
+			log.info("RAZI :: initializeVmSubclient -> backupSetId: ${backupSetId}")
 //			def client = ReferenceData.where { category == "${backupProvider.type.code}.backup.backupServer.${backupProvider.id}" && internalId == clientId }.get()
+			log.info("RAZI :: initializeVmSubclient -> client -> category: ${backupProvider.type.code}.backup.backupServer.${backupProvider.id}")
 			def client = morpheus.services.referenceData.find(new DataQuery()
 												.withFilter("category", "${backupProvider.type.code}.backup.backupServer.${backupProvider.id}")
 												.withFilter("internalId", clientId))
+			log.info("RAZI :: initializeVmSubclient -> client: ${client}")
 //			def backupSet = backupSetId ? ReferenceData.where { category == "${backupProvider.type.code}.backup.backupSet.${backupProvider.id}.${client.id}" && internalId == backupSetId }.get() : getDefaultBackupSet(backupProvider, client)
+			log.info("RAZI :: initializeVmSubclient -> backupSetClient -> category: ${backupProvider.type.code}.backup.backupSet.${backupProvider.id}.${client.id}")
 			def backupSetClient = morpheus.services.referenceData.find(new DataQuery()
 														.withFilter("category", "${backupProvider.type.code}.backup.backupSet.${backupProvider.id}.${client.id}")
 														.withFilter("internalId", backupSetId))
+			log.info("RAZI :: initializeVmSubclient -> backupSetClient: ${backupSetClient}")
 			def backupSet = backupSetId ? backupSetClient : getDefaultBackupSet(backupProvider, client)
+			log.info("RAZI :: initializeVmSubclient -> backupSet: ${backupSet}")
 //			def storagePolicy = ReferenceData.where { category == "${backupProvider.type.code}.backup.storagePolicy.${backupProvider.id}" && internalId == storagePolicyId }.get()
+			log.info("RAZI :: initializeVmSubclient -> backupSetClient -> category: ${backupProvider.type.code}.backup.storagePolicy.${backupProvider.id}")
 			def storagePolicy = morpheus.services.referenceData.find(new DataQuery()
 					.withFilter("category", "${backupProvider.type.code}.backup.storagePolicy.${backupProvider.id}")
 					.withFilter("internalId", storagePolicyId))
+			log.info("RAZI :: initializeVmSubclient -> storagePolicy: ${storagePolicy}")
 //			def container = Container.get(backup.containerId)
+			log.info("RAZI :: backup.containerId: ${backup.containerId}")
 			Workload workload = morpheus.services.workload.get(backup.containerId)
+			log.info("RAZI :: initializeVmSubclient -> workload: ${workload}")
+			log.info("RAZI :: initializeVmSubclient -> workload.server: ${workload.server}")
 			def server = workload.server
 //			def server = container.server
 //			ComputeServer server = morpheus.services.computeServer.get(workload.server.id)
 			rtn = CommvaultBackupUtility.createSubclient(authConfig, client.name, "${backup.name}-cvvm", [backupSet: backupSet, storagePolicy: storagePolicy])
+			log.info("RAZI :: initializeVmSubclient -> rtn: ${rtn}")
 			if(rtn.success && rtn?.subclientId) {
 				def subclientResult = CommvaultBackupUtility.getSubclient(authConfig, rtn.subclientId)
+				log.info("RAZI :: initializeVmSubclient -> subclientResult: ${subclientResult}")
 //				backup.addConfigProperties([
 //						"vmSubclientId": rtn.subclientId,  vmSubclientGuid: subclientResult?.subclient?.subClientEntity?.subclientGUID,
 //						vmClientId: client.internalId, vmBackupsetId: backupSet?.internalId, vmStoragePolicyId: storagePolicy?.internalId
 //				])
+				log.info("RAZI :: initializeVmSubclient -> vmSubclientId: ${rtn.subclientId}")
+				log.info("RAZI :: subclientResult?.subclient: ${subclientResult?.subclient}")
+				log.info("RAZI :: subclientResult?.subclient?.subClientEntity: ${subclientResult?.subclient?.subClientEntity}")
+				log.info("RAZI :: initializeVmSubclient -> vmSubclientGuid: ${subclientResult?.subclient?.subClientEntity?.subclientGUID}")
+				log.info("RAZI :: initializeVmSubclient -> vmClientId: ${client.internalId}")
+				log.info("RAZI :: initializeVmSubclient -> vmBackupsetId: ${backupSet?.internalId}")
+				log.info("RAZI :: initializeVmSubclient -> vmStoragePolicyId: ${storagePolicy?.internalId}")
 				backup.setConfigProperty("vmSubclientId", rtn.subclientId)
 				backup.setConfigProperty("vmSubclientGuid", subclientResult?.subclient?.subClientEntity?.subclientGUID)
 				backup.setConfigProperty("vmClientId", client.internalId)
@@ -242,8 +296,11 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 //				backup.save(flush:true)
 				morpheus.services.backup.save(backup)
 				def vmClientId = (server.internalId ?: server.externalId) // use vmware internal ID, move this to the backup type service when split out.
+				log.info("RAZI :: initializeVmSubclient -> vmClientId: ${vmClientId}")
 				def vmClientName = server.name + "_" + server.externalId
+				log.info("RAZI :: initializeVmSubclient -> vmClientName: ${vmClientName}")
 				CommvaultBackupUtility.addVMToSubclient(authConfig, rtn.subclientId, vmClientId, vmClientName)
+				log.info("RAZI :: addVMToSubclient : SUCCESS")
 			}
 
 		} catch(e) {
@@ -358,6 +415,8 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 						return rtn
 					}
 				}
+				log.info("RAZI :: authConfig: ${authConfig}")
+				log.info("RAZI :: subclientId: ${subclientId}")
 				results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
 				log.info("RAZI :: executeBackup -> results: ${results}")
 
@@ -391,12 +450,14 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				} else {
 //					saveBackupResult(backup, results + [backupResult: backupConfig.backupResult])
 					rtn.success = true
-//					rtn.data.backupResult.snapshotId = snapshotResults.snapshotId
-//					rtn.data.backupResult.externalId = snapshotResults.snapshotId
+					rtn.data.backupResult.backupSetId = results.backupSetId ?: BackupResultUtility.generateBackupResultSetId()
+					rtn.data.backupResult.externalId = results.backupJobId
+					rtn.data.backupResult.setConfigProperty("id", BackupResultUtility.generateBackupResultSetId())
+					rtn.data.backupResult.setConfigProperty("backupJobId", results.backupJobId)
 //					rtn.data.backupResult.setConfigProperty("vmId", snapshotResults.externalId)
 //					rtn.data.backupResult.sizeInMb = (saveResults.archiveSize ?: 1) / ComputeUtility.ONE_MEGABYTE
+					rtn.data.backupResult.status = results.result ? getBackupStatus(results.result) : "IN_PROGRESS"
 					rtn.data.backupResult.sizeInMb = (results.totalSize ?: 0) / ComputeUtility.ONE_MEGABYTE
-					rtn.data.backupResult.status = BackupResult.Status.SUCCEEDED
 					rtn.data.updates = true
 					if(!backupResult.endDate) {
 						rtn.data.backupResult.endDate = new Date()
@@ -429,9 +490,98 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 * @return a {@link ServiceResponse} indicating the success or failure of the method. A success value
 	 * of 'false' will halt the further execution process.n
 	 */
+//	@Override
+//	ServiceResponse<BackupExecutionResponse> refreshBackupResult(BackupResult backupResult) {
+//		return ServiceResponse.success(new BackupExecutionResponse(backupResult))
+//	}
 	@Override
 	ServiceResponse<BackupExecutionResponse> refreshBackupResult(BackupResult backupResult) {
-		return ServiceResponse.success(new BackupExecutionResponse(backupResult))
+		ServiceResponse<BackupExecutionResponse> rtn = ServiceResponse.prepare(new BackupExecutionResponse(backupResult))
+		def backup = backupResult.backup
+        log.info("RAZI :: isCommvaultEnabled(backup): ${isCommvaultEnabled(backup)}")
+		if(isCommvaultEnabled(backup)) {
+			def backupProvider = getBackupProvider(backup)
+			def authConfig = plugin.getAuthConfig(backupProvider)
+            log.info("RAZI :: refreshBackupResult -> authConfig: ${authConfig}")
+			def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty('backupJobId')
+            log.info("RAZI :: backupJobId: ${backupJobId}")
+			def backupJob = backup.backupJob
+
+            log.info("RAZI :: if(!backupJob && backupJobId): ${!backupJob && backupJobId}")
+			if(!backupJob && backupJobId) {
+				def result = CommvaultBackupUtility.getJob(authConfig, backupJobId)
+                log.info("RAZI :: refreshBackupResult -> result:${result}")
+				backupJob = result.result
+			}
+
+            log.info("RAZI :: refreshBackupResult -> backupJob: ${backupJob}")
+			if(backupJob) {
+				def isVmSubclient = backupResult.backup.getConfigProperty("vmSubclientId") != null
+                log.info("RAZI :: isVmSubclient: ${isVmSubclient}")
+                log.info("RAZI :: backupJob.endTime: ${backupJob.endTime}")
+                log.info("RAZI :: !backupJob.parentJobId: ${!backupJob.parentJobId}")
+				if(backupJob.endTime != "0" && !backupJob.parentJobId && !isVmSubclient) {
+//					def container = Container.get(backupResult.containerId)
+					Workload workload = morpheus.services.workload.get(backup.containerId)
+                    log.info("RAZI :: refreshBackupResult -> workload: ${workload}")
+					def vmGuid = workload.server?.internalId
+                    log.info("RAZI :: refreshBackupResult -> vmGuid: ${vmGuid}")
+					// if(vmGuid) {
+					// 	def vmJobResult = CommvaultBackupUtility.getVMJobForParentJob(authConfig, vmGuid, backupJob.externalId, [endTime: backupJob.endTime])
+					// 	if(vmJobResult.result) {
+					// 		backupJob = vmJobResult.result
+					// 	}
+					// }
+				}
+
+//				def result = [:]
+//				result.status = getBackupStatus(backupJob.result)
+				rtn.data.backupResult.status = getBackupStatus(backupJob.result)
+                log.info("RAZI :: rtn.data.backupResult.status: ${rtn.data.backupResult.status}")
+//				long sizeInMb = (backupJob.totalSize ?: 0 )/ 1048576
+//				result.sizeInMb = sizeInMb
+				rtn.data.backupResult.sizeInMb = (backupJob.totalSize ?: 0 )/ ComputeUtility.ONE_MEGABYTE
+                log.info("RAZI :: rtn.data.backupResult.sizeInMb: ${rtn.data.backupResult.sizeInMb}")
+//				result.backupSizeInMb = sizeInMb
+				def startDate = backupJob.startTime
+				def endDate = backupJob.endTime
+				if(startDate && endDate) {
+					def start = startDate.toLong() * 1000
+					def end = endDate.toLong() * 1000
+//					result.startDate = start ? new Date(start) : null
+					rtn.data.backupResult.startDate = start ? new Date(start) : null
+//					result.endDate = end ? new Date(end) : null
+					rtn.data.backupResult.endDate = end ? new Date(end) : null
+//					result.durationMillis = (start && end) ? (end - start) : 0
+					rtn.data.backupResult.durationMillis = (start && end) ? (end - start) : 0
+				}
+                log.info("RAZI :: backupJob.parentJobId: ${backupJob.parentJobId}")
+				if(backupJob.parentJobId) {
+//					result.config = result.config ?: [:]
+					rtn.data.backupResult.setConfigProperty("backupJobId", backupJob.externalId)
+					rtn.data.backupResult.setConfigProperty("parentJobId", backupJob.parentJobId)
+//					result.config.backupJobId = backupJob.externalId
+//					result.config.parentJobId = backupJob.parentJobId
+				}
+//				backupService.updateBackupStatus(backupResult.id, null, result)
+			}
+			logoutSession(authConfig)
+            log.info("RAZI :: logoutSession(authConfig) : SUCCESS")
+		}
+        log.info("RAZI :: refreshBackupResult -> last rtn: ${rtn}")
+		return rtn
+	}
+
+	def logoutSession(Map authConfig) {
+		authConfig.token = authConfig.token ?: CommvaultBackupUtility.getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
+		logoutSession(authConfig.apiUrl, authConfig.token)
+	}
+
+	def logoutSession(String apiUrl, String token) {
+        log.info("RAZI :: logoutSession -> token: ${token}")
+		if(token) {
+			CommvaultBackupUtility.logout(apiUrl, token)
+		}
 	}
 	
 	/**

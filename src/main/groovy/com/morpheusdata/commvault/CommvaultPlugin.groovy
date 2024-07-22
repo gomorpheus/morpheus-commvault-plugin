@@ -18,8 +18,11 @@ package com.morpheusdata.commvault
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.model.AccountCredential
 import com.morpheusdata.model.BackupProvider
+import groovy.util.logging.Slf4j
 
+@Slf4j
 class CommvaultPlugin extends Plugin {
 
     static apiBasePath = '/SearchSvc/CVWebService.svc'
@@ -45,7 +48,7 @@ class CommvaultPlugin extends Plugin {
 
     def getAuthConfig(BackupProvider backupProvider) {
         //credentials
-        morpheus.async.accountCredential.loadCredentials(backupProvider)
+        backupProvider = loadCredentials(backupProvider)
         def rtn = [
                 apiUrl: CommvaultBackupUtility.getApiUrl(backupProvider),
                 username:backupProvider.credentialData?.username ?: backupProvider.username,
@@ -57,5 +60,16 @@ class CommvaultPlugin extends Plugin {
 
     MorpheusContext getMorpheusContext() {
         this.morpheus
+    }
+
+    BackupProvider loadCredentials(BackupProvider backupProvider) {
+        log.debug("Loading credentials for backupProvider: ${backupProvider} with account: ${backupProvider.account}")
+        if(!backupProvider.credentialLoaded) {
+            AccountCredential accountCredential
+            accountCredential = this.morpheus.services.accountCredential.loadCredentials(backupProvider)
+            backupProvider.credentialLoaded = true
+            backupProvider.credentialData = accountCredential?.data
+        }
+        return backupProvider
     }
 }
