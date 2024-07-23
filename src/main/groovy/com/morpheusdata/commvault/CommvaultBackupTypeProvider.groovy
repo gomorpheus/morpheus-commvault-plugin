@@ -33,7 +33,8 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getCode() {
-		return "commvaultBackupTypeProvider"
+//		return "commvaultBackupTypeProvider"
+		return "commvault"
 	}
 
 	/**
@@ -44,7 +45,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getName() {
-		return "CommvaultBackupTypeProvider"
+		return "Commvault"
 	}
 	
 	/**

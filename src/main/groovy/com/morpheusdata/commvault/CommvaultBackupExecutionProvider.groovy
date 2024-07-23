@@ -457,17 +457,18 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 //					rtn.data.backupResult.setConfigProperty("vmId", snapshotResults.externalId)
 //					rtn.data.backupResult.sizeInMb = (saveResults.archiveSize ?: 1) / ComputeUtility.ONE_MEGABYTE
 					rtn.data.backupResult.status = results.result ? getBackupStatus(results.result) : "IN_PROGRESS"
+//					rtn.data.backupResult.status = BackupResult.Status.IN_PROGRESS
 					rtn.data.backupResult.sizeInMb = (results.totalSize ?: 0) / ComputeUtility.ONE_MEGABYTE
 					rtn.data.updates = true
-					if(!backupResult.endDate) {
-						rtn.data.backupResult.endDate = new Date()
-						def startDate = backupResult.startDate
-						if(startDate) {
-							def start = DateUtility.parseDate(startDate)
-							def end = rtn.data.backupResult.endDate
-							rtn.data.backupResult.durationMillis = end.time - start.time
-						}
-					}
+//					if(!backupResult.endDate) {
+//						rtn.data.backupResult.endDate = new Date()
+//						def startDate = backupResult.startDate
+//						if(startDate) {
+//							def start = DateUtility.parseDate(startDate)
+//							def end = rtn.data.backupResult.endDate
+//							rtn.data.backupResult.durationMillis = end.time - start.time
+//						}
+//					}
 
 				}
 			}
@@ -505,18 +506,20 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
             log.info("RAZI :: refreshBackupResult -> authConfig: ${authConfig}")
 			def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty('backupJobId')
             log.info("RAZI :: backupJobId: ${backupJobId}")
-			def backupJob = backup.backupJob
+//			def backupJob = backup.backupJob
+			Map backupJob = null
 
             log.info("RAZI :: if(!backupJob && backupJobId): ${!backupJob && backupJobId}")
 			if(!backupJob && backupJobId) {
 				def result = CommvaultBackupUtility.getJob(authConfig, backupJobId)
                 log.info("RAZI :: refreshBackupResult -> result:${result}")
 				backupJob = result.result
+				log.info("RAZI :: refreshBackupResult -> backupJob: ${backupJob}")
 			}
 
-            log.info("RAZI :: refreshBackupResult -> backupJob: ${backupJob}")
+			log.info("RAZI :: refreshBackupResult -> backupJob: ${backupJob}")
 			if(backupJob) {
-				def isVmSubclient = backupResult.backup.getConfigProperty("vmSubclientId") != null
+				/*def isVmSubclient = backupResult.backup.getConfigProperty("vmSubclientId") != null
                 log.info("RAZI :: isVmSubclient: ${isVmSubclient}")
                 log.info("RAZI :: backupJob.endTime: ${backupJob.endTime}")
                 log.info("RAZI :: !backupJob.parentJobId: ${!backupJob.parentJobId}")
@@ -532,12 +535,13 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					// 		backupJob = vmJobResult.result
 					// 	}
 					// }
-				}
+				}*/
 
 //				def result = [:]
 //				result.status = getBackupStatus(backupJob.result)
 				rtn.data.backupResult.status = getBackupStatus(backupJob.result)
-                log.info("RAZI :: rtn.data.backupResult.status: ${rtn.data.backupResult.status}")
+				log.info("RAZI :: rtn.data.backupResult.status: ${rtn.data.backupResult.status}")
+//				rtn.data.backupResult.status = BackupResult.Status.SUCCEEDED
 //				long sizeInMb = (backupJob.totalSize ?: 0 )/ 1048576
 //				result.sizeInMb = sizeInMb
 				rtn.data.backupResult.sizeInMb = (backupJob.totalSize ?: 0 )/ ComputeUtility.ONE_MEGABYTE
@@ -545,6 +549,10 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 //				result.backupSizeInMb = sizeInMb
 				def startDate = backupJob.startTime
 				def endDate = backupJob.endTime
+//				def startDate = backupJob.dateCreated
+//				def endDate = backupJob.lastExecution
+				log.info("RAZI :: startDate: ${startDate}")
+				log.info("RAZI :: endDate: ${endDate}")
 				if(startDate && endDate) {
 					def start = startDate.toLong() * 1000
 					def end = endDate.toLong() * 1000
@@ -556,13 +564,18 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					rtn.data.backupResult.durationMillis = (start && end) ? (end - start) : 0
 				}
                 log.info("RAZI :: backupJob.parentJobId: ${backupJob.parentJobId}")
+//				log.info("RAZI :: backupJob.sourceJobId: ${backupJob.sourceJobId}")
 				if(backupJob.parentJobId) {
+//				if(backupJob.sourceJobId) {
 //					result.config = result.config ?: [:]
 					rtn.data.backupResult.setConfigProperty("backupJobId", backupJob.externalId)
 					rtn.data.backupResult.setConfigProperty("parentJobId", backupJob.parentJobId)
 //					result.config.backupJobId = backupJob.externalId
 //					result.config.parentJobId = backupJob.parentJobId
 				}
+				rtn.data.updates = true
+				rtn.success = true
+
 //				backupService.updateBackupStatus(backupResult.id, null, result)
 			}
 			logoutSession(authConfig)
