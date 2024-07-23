@@ -1,4 +1,4 @@
-package com.morpheusdata.commvault
+package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
@@ -15,6 +15,9 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 
 	Plugin plugin
 	MorpheusContext morpheusContext
+
+	CommvaultBackupRestoreProvider() {
+	}
 
 	CommvaultBackupRestoreProvider(Plugin plugin, MorpheusContext morpheusContext) {
 		this.plugin = plugin

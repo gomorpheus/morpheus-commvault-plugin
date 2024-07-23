@@ -1,12 +1,15 @@
-package com.morpheusdata.commvault
+package com.morpheusdata.commvault.backup.vmware
 
+import com.morpheusdata.commvault.backup.CommvaultBackupExecutionProvider
+import com.morpheusdata.commvault.backup.CommvaultBackupRestoreProvider
+import com.morpheusdata.commvault.backup.CommvaultBackupTypeProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
-import com.morpheusdata.core.backup.AbstractBackupTypeProvider
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.BackupRestoreProvider
 import com.morpheusdata.core.backup.BackupTypeProvider
 import com.morpheusdata.model.BackupProvider as BackupProviderModel
+import com.morpheusdata.model.ComputeServer
 import com.morpheusdata.model.OptionType
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
@@ -17,12 +20,12 @@ import groovy.util.logging.Slf4j
  * the {@link BackupTypeProvider BackupTypeProviders} implemented within the provider.
  */
 @Slf4j
-class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
+class CommvaultVMwareBackupTypeProvider extends CommvaultBackupTypeProvider {
 
-	BackupExecutionProvider executionProvider;
-	BackupRestoreProvider restoreProvider;
+	BackupExecutionProvider executionProvider
+	BackupRestoreProvider restoreProvider
 
-	CommvaultBackupTypeProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
+	CommvaultVMwareBackupTypeProvider(Plugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
 	}
 
@@ -33,8 +36,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getCode() {
-//		return "commvaultBackupTypeProvider"
-		return "commvault"
+		return "commvaultVMWareBackup"
 	}
 
 	/**
@@ -45,7 +47,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getName() {
-		return "Commvault"
+		return "Commvault VMware Backup"
 	}
 	
 	/**
@@ -145,7 +147,23 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	Collection<OptionType> getOptionTypes() {
 		return new ArrayList<OptionType>()
 	}
-	
+
+	BackupTypeProvider getBackupTypeProvider() {
+		return backupTypeProvider
+	}
+
+	String getCloudType() {
+		return "VMware"
+	}
+
+	String getManagedServerType() {
+		return "VC"
+	}
+
+	String getVmRefId(ComputeServer computeServer) {
+		return computeServer.externalId
+	}
+
 	/**
 	 * Get the backup provider which will be responsible for all the operations related to backup executions.
 	 * @return a {@link BackupExecutionProvider} providing methods for backup execution.
@@ -153,7 +171,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	CommvaultBackupExecutionProvider getExecutionProvider() {
 		if(!this.executionProvider) {
-			this.executionProvider = new CommvaultBackupExecutionProvider(getPlugin(), getMorpheus())
+			this.executionProvider = new CommvaultVMwareBackupExecutionProvider(plugin, morpheus, this)
 		}
 		return this.executionProvider
 	}
@@ -165,7 +183,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	CommvaultBackupRestoreProvider getRestoreProvider() {
 		if(!this.restoreProvider) {
-		this.restoreProvider = new CommvaultBackupRestoreProvider(getPlugin())
+			this.restoreProvider = new CommvaultVMwareBackupRestoreProvider(plugin, morpheus, this)
 		}
 		return this.restoreProvider
 	}

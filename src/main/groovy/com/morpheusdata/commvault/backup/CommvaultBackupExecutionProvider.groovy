@@ -1,5 +1,6 @@
-package com.morpheusdata.commvault
+package com.morpheusdata.commvault.backup
 
+import com.morpheusdata.commvault.CommvaultPlugin
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupExecutionProvider
@@ -24,6 +25,9 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 
 	private CommvaultPlugin plugin
 	MorpheusContext morpheusContext
+
+	CommvaultBackupExecutionProvider() {
+	}
 
 	CommvaultBackupExecutionProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		this.plugin = plugin
@@ -356,7 +360,6 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 			statusMap.errorOutput = opts.error
 		}
 
-		updateBackupStatus(opts.backupResult.id, statusMap)
 	}
 
 	private getBackupStatus(backupState) {
@@ -486,7 +489,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	/**
 	 * Periodically call until the backup execution has successfully completed. The default refresh interval is 60 seconds.
 	 * @param backupResult the reference to the results of the backup execution including the last known status. Set the
-	 *                     status to a canceled/succeeded/failed value from one of the {@link BackupStatusUtility} values
+	 *                     status to a canceled/succeeded/failed value from one of the {BackupStatusUtility} values
 	 *                     to end the execution process.
 	 * @return a {@link ServiceResponse} indicating the success or failure of the method. A success value
 	 * of 'false' will halt the further execution process.n
