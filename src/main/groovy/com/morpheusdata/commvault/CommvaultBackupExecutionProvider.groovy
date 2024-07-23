@@ -202,7 +202,9 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 
 				def result = CommvaultBackupUtility.killBackupJob(authConfig, backupJobId)
 				log.debug("cancelBackup : result: ${result}")
-				logoutSession(authConfig)
+				if (authConfig.token) {
+					CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
+				}
 				response.success = result.success
 			} catch(e) {
 				log.error("cancelBackup error: ${e}", e)
@@ -221,11 +223,6 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	@Override
 	ServiceResponse extractBackup(BackupResult backupResultModel, Map opts) {
 		return ServiceResponse.success()
-	}
-
-	private logoutSession(authConfig) {
-		authConfig.token = authConfig.token ?: CommvaultBackupUtility.getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
-		CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
 	}
 
 }		
