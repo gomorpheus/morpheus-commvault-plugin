@@ -5,6 +5,7 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.data.DataFilter
 import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupJob
 import com.morpheusdata.model.BackupProvider
 import com.morpheusdata.model.ReferenceData
@@ -180,6 +181,54 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
         ServiceResponse.success()
     }
 
+    def getBackupProvider(BackupJob backupJob) {
+        backupJob.backupProvider
+    }
+
+    def isCommvaultEnabled(backup) {
+        getBackupProvider(backup)?.enabled
+    }
+
+    def captureActiveSubclientBackup(authConfig, subclientId, clientId, backupsetId) {
+        def activeJobsResults = CommvaultBackupUtility.getBackupJobs(authConfig, subclientId, [query: [clientId: clientId, backupsetId: backupsetId, jobFilter: "Backup", jobCategory: "Active"]])
+        if(activeJobsResults.success && activeJobsResults.results.size() > 0) {
+            def activeBackupJob = activeJobsResults.results.find { it.clientId == clientId && it.subclientId == subclientId && it.backupsetId == backupsetId }
+            return ServiceResponse.success([backupJobId: activeBackupJob.backupJobId])
+        }
+    }
+
+    def createResultsForJob(BackupJob backupJob, Map backupResults, Map opts=[:]) {
+        def tmpAccount = opts.account ?: backupJob.account
+//        def jobBackups = Backup.where { account == tmpAccount && 'backupJob.id' == backupJob.id }
+//        if (opts.user) {
+//            jobBackups = jobBackups.where { createdBy == opts.user }
+//        }
+        List<Backup> jobBackups = []
+        morpheusContext.services.backup.list(new DataQuery().withFilters(
+                new DataFilter<>('account.id', tmpAccount.id),
+                new DataFilter<>('backupJob.id', backupJob.id)
+        )).each { Backup backup ->
+            if(!opts.user || backup.createdBy?.id == opts.user.id) {
+                jobBackups << backup
+            }
+        }
+
+        jobBackups.each { backup ->
+            try {
+                ServiceResponse buildResult = backupService.buildBackupResult(backup, opts)
+                if(buildResult.success == true) {
+                    def backupResult =	buildResult.data.backupResult
+                    saveBackupResult(backup, backupResults + [backupResult: backupResult])
+                } else {
+                    return buildResult
+                }
+            } catch(Exception ex) {
+                log.error("Failed to create backup result backup ${backup.id}", ex)
+                return ServiceResponse.error("Failed to create backup result for backup ${backup.id}")
+            }
+        }
+    }
+
     /**
      * Execute the backup job on the external system.
      * @param backupJob the backup job to be executed
@@ -189,7 +238,48 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
      */
     @Override
     ServiceResponse executeBackupJob(BackupJob backupJob, Map opts) {
-        ServiceResponse.success()
+//        ServiceResponse.success()
+        log.debug("executeBackupJob: {}, {}", backupJob, opts)
+        if(!isCommvaultEnabled(backupJob)) {
+            return ServiceResponse.error("Commvault backup integration is disabled")
+        }
+
+        def results
+        try {
+            def backupProvider = getBackupProvider(backupJob)
+            def authConfig = plugin.getAuthConfig(backupProvider)
+            if(authConfig) {
+                def subclientId = backupJob.internalId
+                results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
+
+                log.debug("executeBackupJob result: {}", results)
+                if(!results.success) {
+                    if(results.errorCode == 2) {
+                        // the job is already running, capture the job id
+                        def jobConfig = backupJob?.getConfigMap()
+                        if(jobConfig) {
+                            return captureActiveSubclientBackup(authConfig, jobConfig.subclientId, jobConfig.clientId, jobConfig.backupsetId)
+                        }
+                        if(!results.backupJobId) {
+                            return ServiceResponse.error("Failed to capture active id for backup job ${backupJob.id}")
+
+                        }
+                    } else {
+                        log.error("Failed to execute backup job ${backupJob.id}")
+                        return ServiceResponse.error("Failed to execute backup job ${backupJob.id}", results)
+                    }
+                }
+
+                createResultsForJob(backupJob, results, opts)
+            } else {
+                return ServiceResponse.error("Authentication information not found.")
+            }
+        } catch(e) {
+            log.error("Failed to execute backup job ${backupJob.id}: ${e}", e)
+            return ServiceResponse.error("Failed to execute backup job ${backupJob.id}")
+        }
+
+        return ServiceResponse.success(results)
     }
 
     def getDefaultBackupSet(BackupProvider backupProvider, ReferenceData client) {
