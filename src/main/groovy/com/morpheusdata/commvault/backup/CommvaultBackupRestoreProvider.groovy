@@ -1,29 +1,26 @@
 package com.morpheusdata.commvault.backup
 
+import com.morpheusdata.commvault.CommvaultPlugin
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.backup.BackupRestoreProvider
-import com.morpheusdata.response.ServiceResponse;
-import com.morpheusdata.model.BackupRestore;
-import com.morpheusdata.model.BackupResult;
-import com.morpheusdata.model.Backup;
+import com.morpheusdata.model.Backup
+import com.morpheusdata.model.BackupRestore
+import com.morpheusdata.model.BackupResult
 import com.morpheusdata.model.Instance
+import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
 class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 
-	Plugin plugin
+	CommvaultPlugin plugin
 	MorpheusContext morpheusContext
 
-	CommvaultBackupRestoreProvider() {
-	}
-
-	CommvaultBackupRestoreProvider(Plugin plugin, MorpheusContext morpheusContext) {
+	CommvaultBackupRestoreProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
 		this.plugin = plugin
 		this.morpheusContext = morpheusContext
 	}
-	
+
 	/**
 	 * Returns the Morpheus Context for interacting with data stored in the Main Morpheus Application
 	 * @return an implementation of the MorpheusContext for running Future based rxJava queries

@@ -1,4 +1,4 @@
-package com.morpheusdata.commvault.backup.vmware
+package com.morpheusdata.commvault.backup.file
 
 import com.morpheusdata.commvault.CommvaultPlugin
 import com.morpheusdata.commvault.backup.CommvaultBackupRestoreProvider
@@ -7,11 +7,11 @@ import com.morpheusdata.core.MorpheusContext
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class CommvaultVMwareBackupRestoreProvider extends CommvaultBackupRestoreProvider {
+class CommvaultFileBackupRestoreProvider extends CommvaultBackupRestoreProvider {
 
 	CommvaultBackupTypeProvider backupTypeProvider
 
-	CommvaultVMwareBackupRestoreProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext, CommvaultBackupTypeProvider backupTypeProvider) {
+	CommvaultFileBackupRestoreProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext, CommvaultBackupTypeProvider backupTypeProvider) {
 		super(plugin, morpheusContext)
 		this.backupTypeProvider = backupTypeProvider
 	}
