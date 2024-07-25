@@ -16,7 +16,7 @@ import groovy.util.logging.Slf4j
  * the {@link BackupTypeProvider BackupTypeProviders} implemented within the provider.
  */
 @Slf4j
-class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
+abstract class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 
 	BackupExecutionProvider executionProvider;
 	BackupRestoreProvider restoreProvider;
@@ -29,28 +29,6 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 		super(plugin, morpheusContext)
 		this.plugin = plugin
 		this.morpheusContext = morpheusContext
-	}
-
-	/**
-	 * A unique shortcode used for referencing the provided provider. Make sure this is going to be unique as any data
-	 * that is seeded or generated related to this provider will reference it by this code.
-	 * @return short code string that should be unique across all other plugin implementations.
-	 */
-	@Override
-	String getCode() {
-//		return "commvaultBackupTypeProvider"
-		return "commvault"
-	}
-
-	/**
-	 * Provides the provider name for reference when adding to the Morpheus Orchestrator
-	 * NOTE: This may be useful to set as an i18n key for UI reference and localization support.
-	 *
-	 * @return either an English name of a Provider or an i18n based key that can be scanned for in a properties file.
-	 */
-	@Override
-	String getName() {
-		return "Commvault"
 	}
 	
 	/**
@@ -149,30 +127,6 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	Collection<OptionType> getOptionTypes() {
 		return new ArrayList<OptionType>()
-	}
-	
-	/**
-	 * Get the backup provider which will be responsible for all the operations related to backup executions.
-	 * @return a {@link BackupExecutionProvider} providing methods for backup execution.
-	 */
-	@Override
-	CommvaultBackupExecutionProvider getExecutionProvider() {
-		if(!this.executionProvider) {
-			this.executionProvider = new CommvaultBackupExecutionProvider(getPlugin(), morpheusContext())
-		}
-		return this.executionProvider
-	}
-
-	/**
-	 * Get the backup provider which will be responsible for all the operations related to backup restore.
-	 * @return a {@link BackupRestoreProvider} providing methods for backup restore operations.
-	 */
-	@Override
-	CommvaultBackupRestoreProvider getRestoreProvider() {
-		if(!this.restoreProvider) {
-		this.restoreProvider = new CommvaultBackupRestoreProvider(getPlugin(), getMorpheusContext())
-		}
-		return this.restoreProvider
 	}
 
 	/**

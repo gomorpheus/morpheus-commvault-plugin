@@ -127,7 +127,7 @@ class CommvaultFileBackupTypeProvider extends CommvaultBackupTypeProvider {
 	 */
 	@Override
 	String getRestoreNewMode() {
-		return "VM_RESTORE"
+		return null
 	}
 	
 	/**
@@ -146,22 +146,6 @@ class CommvaultFileBackupTypeProvider extends CommvaultBackupTypeProvider {
 	@Override
 	Collection<OptionType> getOptionTypes() {
 		return new ArrayList<OptionType>()
-	}
-
-	BackupTypeProvider getBackupTypeProvider() {
-		return backupTypeProvider
-	}
-
-	String getCloudType() {
-		return "VMware"
-	}
-
-	String getManagedServerType() {
-		return "VC"
-	}
-
-	String getVmRefId(ComputeServer computeServer) {
-		return computeServer.externalId
 	}
 
 	/**
@@ -186,29 +170,6 @@ class CommvaultFileBackupTypeProvider extends CommvaultBackupTypeProvider {
 			this.restoreProvider = new CommvaultFileBackupRestoreProvider(plugin, morpheus, this)
 		}
 		return this.restoreProvider
-	}
-
-	/**
-	 * Refresh the provider with the associated data in the external system.
-	 * @param authConfig  necessary connection and credentials to connect to the external provider
-	 * @param backupProvider an instance of the backup integration provider
-	 * @return a {@link ServiceResponse} object. A ServiceResponse with a success value of 'false' will indicate the
-	 * refresh process has failed and will halt any further backup creation processes in the core system.
-	 */
-	@Override
-	ServiceResponse refresh(Map authConfig, BackupProviderModel backupProviderModel) {
-		return ServiceResponse.success()
-	}
-	
-	/**
-	 * Clean up all data created by the backup type provider.
-	 * @param backupProvider the provider to be cleaned up
-	 * @param opts additional options
-	 * @return a {@link ServiceResponse} object
-	 */
-	@Override
-	ServiceResponse clean(BackupProviderModel backupProviderModel, Map opts) {
-		return ServiceResponse.success()
 	}
 
 }			

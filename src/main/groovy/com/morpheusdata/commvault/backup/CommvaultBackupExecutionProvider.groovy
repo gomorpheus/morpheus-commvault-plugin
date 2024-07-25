@@ -415,7 +415,6 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	}
 
 	def logoutSession(Map authConfig) {
-		authConfig.token = authConfig.token ?: CommvaultBackupUtility.getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		logoutSession(authConfig.apiUrl, authConfig.token)
 	}
 
