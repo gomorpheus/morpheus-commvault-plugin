@@ -21,7 +21,6 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.model.AccountCredential
 import com.morpheusdata.model.BackupProvider
-import groovy.util.logging.Slf4j
 
 class CommvaultPlugin extends Plugin {
 

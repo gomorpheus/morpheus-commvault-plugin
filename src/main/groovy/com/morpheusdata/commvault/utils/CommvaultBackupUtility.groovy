@@ -531,7 +531,6 @@ class CommvaultBackupUtility {
 	static killBackupJob(authConfig, backupJobId){
 		def rtn = [success:false]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
-		def taskId = ""
 		def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Job/${backupJobId}/Action/kill", authConfig.token, [format:'xml'], 'POST')
 		log.debug("got: ${results}")
 

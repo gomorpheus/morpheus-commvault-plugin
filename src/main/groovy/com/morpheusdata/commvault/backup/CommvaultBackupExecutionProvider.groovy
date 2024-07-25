@@ -207,7 +207,6 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	}
 
 	def getDefaultBackupSet(BackupProvider backupProvider, ReferenceData client) {
-//		def backupSets = ReferenceData.where { category == "${backupProvider.type.code}.backup.backupSet.${backupProvider.id}.${client.id}"}.list()
 		def backupSets = morpheus.services.referenceData.list(new DataQuery()
 				.withFilter("category", "${backupProvider.type.code}.backup.backupSet.${backupProvider.id}.${client.id}"))
 		def rtn = backupSets.find { it.name == "defaultBackupSet" }
@@ -423,16 +422,34 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 			CommvaultBackupUtility.logout(apiUrl, token)
 		}
 	}
-	
+
 	/**
 	 * Cancel the backup execution process without waiting for a result.
-	 * @param backupResultModel the details associated with the results of the backup execution.
+	 * @param backupResult the details associated with the results of the backup execution.
 	 * @param opts additional options.
 	 * @return a {@link ServiceResponse} indicating the success or failure of the backup execution cancellation.
 	 */
 	@Override
-	ServiceResponse cancelBackup(BackupResult backupResultModel, Map opts) {
-		return ServiceResponse.success()
+	ServiceResponse cancelBackup(BackupResult backupResult, Map opts) {
+		log.debug("cancelBackup: backupResult: {}, opts {}:", backupResult, opts)
+		ServiceResponse response = ServiceResponse.prepare()
+		if(backupResult != null) {
+			try {
+				def backupProvider = backupResult.backup.backupProvider
+				def authConfig = plugin.getAuthConfig(backupProvider)
+				def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty("backupJobId")
+
+				def result = CommvaultBackupUtility.killBackupJob(authConfig, backupJobId)
+				log.debug("cancelBackup : result: ${result}")
+				if (authConfig.token) {
+					CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
+				}
+				response.success = result.success
+			} catch(e) {
+				log.error("cancelBackup error: ${e}", e)
+			}
+		}
+		return response
 	}
 
 	/**
