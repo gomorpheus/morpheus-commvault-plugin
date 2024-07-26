@@ -15,6 +15,7 @@
 */
 package com.morpheusdata.commvault
 
+import com.morpheusdata.commvault.backup.CommvaultBackupProvider
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin

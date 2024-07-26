@@ -1,12 +1,15 @@
-package com.morpheusdata.commvault
+package com.morpheusdata.commvault.backup.openstack
 
+import com.morpheusdata.commvault.backup.CommvaultBackupExecutionProvider
+import com.morpheusdata.commvault.backup.CommvaultBackupRestoreProvider
+import com.morpheusdata.commvault.backup.CommvaultBackupTypeProvider
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
-import com.morpheusdata.core.backup.AbstractBackupTypeProvider
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.BackupRestoreProvider
 import com.morpheusdata.core.backup.BackupTypeProvider
 import com.morpheusdata.model.BackupProvider as BackupProviderModel
+import com.morpheusdata.model.ComputeServer
 import com.morpheusdata.model.OptionType
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
@@ -17,12 +20,12 @@ import groovy.util.logging.Slf4j
  * the {@link BackupTypeProvider BackupTypeProviders} implemented within the provider.
  */
 @Slf4j
-class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
+class CommvaultOpenstackBackupTypeProvider extends CommvaultBackupTypeProvider {
 
-	BackupExecutionProvider executionProvider;
-	BackupRestoreProvider restoreProvider;
+	BackupExecutionProvider executionProvider
+	BackupRestoreProvider restoreProvider
 
-	CommvaultBackupTypeProvider(CommvaultPlugin plugin, MorpheusContext morpheusContext) {
+	CommvaultOpenstackBackupTypeProvider(Plugin plugin, MorpheusContext morpheusContext) {
 		super(plugin, morpheusContext)
 	}
 
@@ -33,7 +36,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getCode() {
-		return "commvaultBackupTypeProvider"
+		return "commvaultOpenstackBackup"
 	}
 
 	/**
@@ -44,7 +47,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	 */
 	@Override
 	String getName() {
-		return "CommvaultBackupTypeProvider"
+		return "Commvault OpenStack Backup"
 	}
 	
 	/**
@@ -144,7 +147,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	Collection<OptionType> getOptionTypes() {
 		return new ArrayList<OptionType>()
 	}
-	
+
 	/**
 	 * Get the backup provider which will be responsible for all the operations related to backup executions.
 	 * @return a {@link BackupExecutionProvider} providing methods for backup execution.
@@ -152,7 +155,7 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	CommvaultBackupExecutionProvider getExecutionProvider() {
 		if(!this.executionProvider) {
-			this.executionProvider = new CommvaultBackupExecutionProvider(getPlugin(), getMorpheus())
+			this.executionProvider = new CommvaultOpenstackBackupExecutionProvider(plugin, morpheus, this)
 		}
 		return this.executionProvider
 	}
@@ -164,32 +167,9 @@ class CommvaultBackupTypeProvider extends AbstractBackupTypeProvider {
 	@Override
 	CommvaultBackupRestoreProvider getRestoreProvider() {
 		if(!this.restoreProvider) {
-		this.restoreProvider = new CommvaultBackupRestoreProvider(getPlugin())
+			this.restoreProvider = new CommvaultOpenstackBackupRestoreProvider(plugin, morpheus, this)
 		}
 		return this.restoreProvider
-	}
-
-	/**
-	 * Refresh the provider with the associated data in the external system.
-	 * @param authConfig  necessary connection and credentials to connect to the external provider
-	 * @param backupProvider an instance of the backup integration provider
-	 * @return a {@link ServiceResponse} object. A ServiceResponse with a success value of 'false' will indicate the
-	 * refresh process has failed and will halt any further backup creation processes in the core system.
-	 */
-	@Override
-	ServiceResponse refresh(Map authConfig, BackupProviderModel backupProviderModel) {
-		return ServiceResponse.success()
-	}
-	
-	/**
-	 * Clean up all data created by the backup type provider.
-	 * @param backupProvider the provider to be cleaned up
-	 * @param opts additional options
-	 * @return a {@link ServiceResponse} object
-	 */
-	@Override
-	ServiceResponse clean(BackupProviderModel backupProviderModel, Map opts) {
-		return ServiceResponse.success()
 	}
 
 }			
