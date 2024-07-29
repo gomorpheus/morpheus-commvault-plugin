@@ -1,5 +1,10 @@
-package com.morpheusdata.commvault
+package com.morpheusdata.commvault.backup
 
+
+import com.morpheusdata.commvault.CommvaultPlugin
+import com.morpheusdata.commvault.backup.file.CommvaultFileBackupTypeProvider
+import com.morpheusdata.commvault.backup.openstack.CommvaultOpenstackBackupTypeProvider
+import com.morpheusdata.commvault.backup.vmware.CommvaultVMwareBackupTypeProvider
 import com.morpheusdata.commvault.sync.BackupSetsSync
 import com.morpheusdata.commvault.sync.ClientSync
 import com.morpheusdata.commvault.sync.StoragePoliciesSync
@@ -29,9 +34,20 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 		super(plugin, morpheusContext)
 		this.plugin = plugin
 
-		CommvaultBackupTypeProvider backupTypeProvider = new CommvaultBackupTypeProvider(plugin, morpheus)
-		plugin.registerProvider(backupTypeProvider)
-		addScopedProvider(backupTypeProvider, "vmware", null)
+		// register VMWare backup provider
+		CommvaultVMwareBackupTypeProvider vmwareProvider = new CommvaultVMwareBackupTypeProvider(plugin, morpheus)
+		plugin.registerProvider(vmwareProvider)
+		addScopedProvider(vmwareProvider, "vmware", null)
+
+		// register Openstack backup provider
+		CommvaultOpenstackBackupTypeProvider openstackProvider = new CommvaultOpenstackBackupTypeProvider(plugin, morpheus)
+		plugin.registerProvider(openstackProvider)
+		addScopedProvider(openstackProvider, "openstack", null)
+
+		// register File backup provider
+		CommvaultFileBackupTypeProvider fileProvider = new CommvaultFileBackupTypeProvider(plugin, morpheus)
+		plugin.registerProvider(fileProvider)
+		addScopedProvider(fileProvider, "file", null)
 	}
 
 	/**
