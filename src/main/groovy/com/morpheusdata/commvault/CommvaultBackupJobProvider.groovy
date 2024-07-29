@@ -3,11 +3,14 @@ package com.morpheusdata.commvault
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupJobProvider
+import com.morpheusdata.core.backup.response.BackupExecutionResponse
 import com.morpheusdata.core.data.DataFilter
 import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.model.Account
 import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupJob
 import com.morpheusdata.model.BackupProvider
+import com.morpheusdata.model.BackupResult
 import com.morpheusdata.model.ReferenceData
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
@@ -197,38 +200,6 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
         }
     }
 
-    def createResultsForJob(BackupJob backupJob, Map backupResults, Map opts=[:]) {
-        def tmpAccount = opts.account ?: backupJob.account
-//        def jobBackups = Backup.where { account == tmpAccount && 'backupJob.id' == backupJob.id }
-//        if (opts.user) {
-//            jobBackups = jobBackups.where { createdBy == opts.user }
-//        }
-        List<Backup> jobBackups = []
-        morpheusContext.services.backup.list(new DataQuery().withFilters(
-                new DataFilter<>('account.id', tmpAccount.id),
-                new DataFilter<>('backupJob.id', backupJob.id)
-        )).each { Backup backup ->
-            if(!opts.user || backup.createdBy?.id == opts.user.id) {
-                jobBackups << backup
-            }
-        }
-
-        jobBackups.each { backup ->
-            try {
-                ServiceResponse buildResult = backupService.buildBackupResult(backup, opts)
-                if(buildResult.success == true) {
-                    def backupResult =	buildResult.data.backupResult
-                    saveBackupResult(backup, backupResults + [backupResult: backupResult])
-                } else {
-                    return buildResult
-                }
-            } catch(Exception ex) {
-                log.error("Failed to create backup result backup ${backup.id}", ex)
-                return ServiceResponse.error("Failed to create backup result for backup ${backup.id}")
-            }
-        }
-    }
-
     /**
      * Execute the backup job on the external system.
      * @param backupJob the backup job to be executed
@@ -240,6 +211,7 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
     ServiceResponse executeBackupJob(BackupJob backupJob, Map opts) {
 //        ServiceResponse.success()
         log.debug("executeBackupJob: {}, {}", backupJob, opts)
+        ServiceResponse<List<BackupExecutionResponse>> rtn = ServiceResponse.prepare(new ArrayList<BackupExecutionResponse>())
         if(!isCommvaultEnabled(backupJob)) {
             return ServiceResponse.error("Commvault backup integration is disabled")
         }
@@ -270,7 +242,34 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
                     }
                 }
 
-                createResultsForJob(backupJob, results, opts)
+//                createResultsForJob(backupJob, results, opts)
+                Account tmpAccount = opts.account ?: backupJob.account
+                def jobBackups = morpheusContext.services.backup.list(new DataQuery().withFilters(
+                        new DataFilter<>('account.id', tmpAccount.id),
+                        new DataFilter<>('backupJob.id', backupJob.id)
+                ))
+                jobBackups.each { Backup backup ->
+                    if(!opts.user || backup.createdBy?.id == opts.user.id) {
+                        jobBackups << backup
+                    }
+                }
+
+                jobBackups.each { backup ->
+                    try {
+                        BackupResult backupResult = new BackupResult(backup: backup)
+                        backupResult.backupType = "default"
+                        backupResult.setConfigProperty("backupSessionId", results.backupSessionId)
+                        def executionResponse = new BackupExecutionResponse(backupResult)
+                        executionResponse.updates = true
+                        log.debug("rtn.data: ${rtn.data}")
+                        rtn.data.add(executionResponse)
+                    } catch(Exception ex) {
+                        log.error("Failed to create backup result backup ${backup.id}", ex)
+                        return ServiceResponse.error("Failed to create backup result for backup ${backup.id}")
+                    }
+                }
+
+                rtn.success = true
             } else {
                 return ServiceResponse.error("Authentication information not found.")
             }
@@ -279,7 +278,7 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
             return ServiceResponse.error("Failed to execute backup job ${backupJob.id}")
         }
 
-        return ServiceResponse.success(results)
+        return rtn
     }
 
     def getDefaultBackupSet(BackupProvider backupProvider, ReferenceData client) {
