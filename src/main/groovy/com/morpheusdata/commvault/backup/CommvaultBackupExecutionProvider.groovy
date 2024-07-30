@@ -8,7 +8,6 @@ import com.morpheusdata.core.backup.response.BackupExecutionResponse
 import com.morpheusdata.core.backup.util.BackupResultUtility
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.util.ComputeUtility
-import com.morpheusdata.core.util.DateUtility
 import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupJob
 import com.morpheusdata.model.BackupProvider
@@ -164,14 +163,6 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 		return ServiceResponse.success()
 	}
 
-	def getBackupProvider(Backup backup) {
-		backup.backupProvider
-	}
-
-	def isCommvaultEnabled(backup) {
-		getBackupProvider(backup)?.enabled
-	}
-
 	def getStoragePolicyId(Map authConfig, BackupJob backupJob) {
 		def rtn = [success:false]
 		try {
@@ -217,7 +208,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	def initializeVmSubclient(Backup backup, Map opts) {
 		def rtn = [success:false]
 		try {
-			def backupProvider = getBackupProvider(backup)
+			def backupProvider = backup.backupProvider
 			def authConfig = plugin.getAuthConfig(backupProvider)
 			def jobConfig = backup.backupJob.getConfigMap()
 			def clientId = jobConfig.clientId
@@ -258,35 +249,6 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 		return rtn
 	}
 
-	def captureActiveSubclientBackup(authConfig, subclientId, clientId, backupsetId) {
-		def activeJobsResults = CommvaultBackupUtility.getBackupJobs(authConfig, subclientId, [query: [clientId: clientId, backupsetId: backupsetId, jobFilter: "Backup", jobCategory: "Active"]])
-		if(activeJobsResults.success && activeJobsResults.results.size() > 0) {
-			def activeBackupJob = activeJobsResults.results.find { it.clientId == clientId && it.subclientId == subclientId && it.backupsetId == backupsetId }
-			return ServiceResponse.success([backupJobId: activeBackupJob.backupJobId])
-		}
-	}
-
-	private getBackupStatus(backupState) {
-		def status
-		if(backupState.toLowerCase().contains("completed") && backupState.toLowerCase().contains("errors")) {
-			status = BackupResult.Status.SUCCEEDED_WARNING
-		} else if(backupState.contains("Failed") || backupState.contains("errors")) {
-			status = BackupResult.Status.FAILED
-		} else if(["Interrupted", "Killed", "Suspend", "Suspend Pending", "Kill Pending"].contains(backupState) || backupState.contains("Killed")) {
-			status = BackupResult.Status.CANCELLED
-		} else if(["Running", "Waiting", "Pending"].contains(backupState) || backupState.contains("Running")) {
-			status = BackupResult.Status.IN_PROGRESS
-		} else if(backupState == "Completed" || backupState.contains("Completed")) {
-			status = BackupResult.Status.SUCCEEDED
-		} else if(backupState == "Queued") {
-			status = BackupResult.Status.START_REQUESTED
-		} else if(["Kill", "Pending" ,"Interrupt", "Pending"].contains(backupState)) {
-			status = BackupResult.Status.CANCEL_REQUESTED
-		}
-
-		return status ? status.toString() : status
-	}
-
 	/**
 	 * Initiate the backup process on the external provider system.
 	 * @param backup the backup details associated with the backup execution.
@@ -302,14 +264,14 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	ServiceResponse<BackupExecutionResponse> executeBackup(Backup backup, BackupResult backupResult, Map executionConfig, Cloud cloud, ComputeServer computeServer, Map opts) {
 		log.debug("executeBackup: {}", backup)
 		ServiceResponse<BackupExecutionResponse> rtn = ServiceResponse.prepare(new BackupExecutionResponse(backupResult))
-		if(!isCommvaultEnabled(backup)) {
+		if(!backup.backupProvider?.enabled) {
 			rtn.error = "Commvault backup integration is disabled"
 			return rtn
 		}
 
 		def results = [:]
 		try {
-			def backupProvider = getBackupProvider(backup)
+			def backupProvider = backup.backupProvider
 			def authConfig = plugin.getAuthConfig(backupProvider)
 			if(authConfig) {
 				def subclientId = backup.getConfigProperty("vmSubclientId")
@@ -328,8 +290,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					if(results.errorCode == 2) {
 						def backupConfigMap = backup.getConfigMap()
 						if(backupConfigMap) {
-							def backupResponce = captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
-							return backupResponce
+							return plugin.captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
 						}
 						if(!results.backupJobId) {
 							rtn.error = "Failed to capture active id for backup job ${backup.id.id}"
@@ -349,7 +310,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					rtn.data.backupResult.externalId = results.backupJobId
 					rtn.data.backupResult.setConfigProperty("id", BackupResultUtility.generateBackupResultSetId())
 					rtn.data.backupResult.setConfigProperty("backupJobId", results.backupJobId)
-					rtn.data.backupResult.status = results.result ? getBackupStatus(results.result) : BackupResult.Status.IN_PROGRESS
+					rtn.data.backupResult.status = results.result ? plugin.getBackupStatus(results.result) : BackupResult.Status.IN_PROGRESS
 					rtn.data.backupResult.sizeInMb = (results.totalSize ?: 0) / ComputeUtility.ONE_MEGABYTE
 					rtn.data.updates = true
 
@@ -377,8 +338,8 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 		log.debug("refreshBackupResult -> backupResult: {}", backupResult)
 		ServiceResponse<BackupExecutionResponse> rtn = ServiceResponse.prepare(new BackupExecutionResponse(backupResult))
 		def backup = backupResult.backup
-		if(isCommvaultEnabled(backup)) {
-			def backupProvider = getBackupProvider(backup)
+		if(backup.backupProvider?.enabled) {
+			def backupProvider = backup.backupProvider
 			def authConfig = plugin.getAuthConfig(backupProvider)
 			def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty('backupJobId')
 			Map backupJob = null
@@ -389,7 +350,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 			}
 
 			if(backupJob) {
-				rtn.data.backupResult.status = getBackupStatus(backupJob.result)
+				rtn.data.backupResult.status = plugin.getBackupStatus(backupJob.result)
 				rtn.data.backupResult.sizeInMb = (backupJob.totalSize ?: 0 )/ ComputeUtility.ONE_MEGABYTE
 				def startDate = backupJob.startTime
 				def endDate = backupJob.endTime
