@@ -73,33 +73,5 @@ class CommvaultPlugin extends Plugin {
         }
         return backupProvider
     }
-
-    def captureActiveSubclientBackup(authConfig, subclientId, clientId, backupsetId) {
-        def activeJobsResults = CommvaultBackupUtility.getBackupJobs(authConfig, subclientId, [query: [clientId: clientId, backupsetId: backupsetId, jobFilter: "Backup", jobCategory: "Active"]])
-        if(activeJobsResults.success && activeJobsResults.results.size() > 0) {
-            def activeBackupJob = activeJobsResults.results.find { it.clientId == clientId && it.subclientId == subclientId && it.backupsetId == backupsetId }
-            return ServiceResponse.success([backupJobId: activeBackupJob.backupJobId])
-        }
-    }
-
-    def getBackupStatus(backupState) {
-        def status
-        if(backupState.toLowerCase().contains("completed") && backupState.toLowerCase().contains("errors")) {
-            status = BackupResult.Status.SUCCEEDED_WARNING
-        } else if(backupState.contains("Failed") || backupState.contains("errors")) {
-            status = BackupResult.Status.FAILED
-        } else if(["Interrupted", "Killed", "Suspend", "Suspend Pending", "Kill Pending"].contains(backupState) || backupState.contains("Killed")) {
-            status = BackupResult.Status.CANCELLED
-        } else if(["Running", "Waiting", "Pending"].contains(backupState) || backupState.contains("Running")) {
-            status = BackupResult.Status.IN_PROGRESS
-        } else if(backupState == "Completed" || backupState.contains("Completed")) {
-            status = BackupResult.Status.SUCCEEDED
-        } else if(backupState == "Queued") {
-            status = BackupResult.Status.START_REQUESTED
-        } else if(["Kill", "Pending" ,"Interrupt", "Pending"].contains(backupState)) {
-            status = BackupResult.Status.CANCEL_REQUESTED
-        }
-
-        return status ? status.toString() : status
-    }
+    
 }

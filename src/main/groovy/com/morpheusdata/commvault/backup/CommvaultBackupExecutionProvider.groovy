@@ -2,6 +2,7 @@ package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.commvault.CommvaultPlugin
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupExecutionProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
@@ -290,7 +291,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					if(results.errorCode == 2) {
 						def backupConfigMap = backup.getConfigMap()
 						if(backupConfigMap) {
-							return plugin.captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
+							return CommvaultBackupUtility.captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
 						}
 						if(!results.backupJobId) {
 							rtn.error = "Failed to capture active id for backup job ${backup.id.id}"
@@ -310,7 +311,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					rtn.data.backupResult.externalId = results.backupJobId
 					rtn.data.backupResult.setConfigProperty("id", BackupResultUtility.generateBackupResultSetId())
 					rtn.data.backupResult.setConfigProperty("backupJobId", results.backupJobId)
-					rtn.data.backupResult.status = results.result ? plugin.getBackupStatus(results.result) : BackupResult.Status.IN_PROGRESS
+					rtn.data.backupResult.status = results.result ? CommvaultReferenceUtility.getBackupStatus(results.result) : BackupResult.Status.IN_PROGRESS
 					rtn.data.backupResult.sizeInMb = (results.totalSize ?: 0) / ComputeUtility.ONE_MEGABYTE
 					rtn.data.updates = true
 
@@ -350,7 +351,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 			}
 
 			if(backupJob) {
-				rtn.data.backupResult.status = plugin.getBackupStatus(backupJob.result)
+				rtn.data.backupResult.status = CommvaultReferenceUtility.getBackupStatus(backupJob.result)
 				rtn.data.backupResult.sizeInMb = (backupJob.totalSize ?: 0 )/ ComputeUtility.ONE_MEGABYTE
 				def startDate = backupJob.startTime
 				def endDate = backupJob.endTime

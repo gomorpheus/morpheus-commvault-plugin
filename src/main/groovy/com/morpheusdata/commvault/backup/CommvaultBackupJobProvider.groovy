@@ -2,6 +2,7 @@ package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.commvault.CommvaultPlugin
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupJobProvider
 import com.morpheusdata.core.backup.response.BackupExecutionResponse
@@ -216,7 +217,7 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
                         // the job is already running, capture the job id
                         def jobConfig = backupJob?.getConfigMap()
                         if(jobConfig) {
-                            return plugin.captureActiveSubclientBackup(authConfig, jobConfig.subclientId, jobConfig.clientId, jobConfig.backupsetId)
+                            return CommvaultBackupUtility.captureActiveSubclientBackup(authConfig, jobConfig.subclientId, jobConfig.clientId, jobConfig.backupsetId)
                         }
                         if(!results.backupJobId) {
                             return ServiceResponse.error("Failed to capture active id for backup job ${backupJob.id}")
@@ -249,7 +250,7 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
                         backupResult.externalId = results.backupJobId
                         backupResult.setConfigProperty("id", BackupResultUtility.generateBackupResultSetId())
                         backupResult.setConfigProperty("backupJobId", results.backupJobId)
-                        backupResult.status = results.result ? plugin.getBackupStatus(results.result) : BackupResult.Status.IN_PROGRESS
+                        backupResult.status = results.result ? CommvaultReferenceUtility.getBackupStatus(results.result) : BackupResult.Status.IN_PROGRESS
                         backupResult.sizeInMb = (results.totalSize ?: 0) / ComputeUtility.ONE_MEGABYTE
 
                         def executionResponse = new BackupExecutionResponse(backupResult)
