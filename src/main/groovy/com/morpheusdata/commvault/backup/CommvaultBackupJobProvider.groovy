@@ -2,12 +2,19 @@ package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.commvault.CommvaultPlugin
 import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupJobProvider
+import com.morpheusdata.core.backup.response.BackupExecutionResponse
+import com.morpheusdata.core.backup.util.BackupResultUtility
 import com.morpheusdata.core.data.DataFilter
 import com.morpheusdata.core.data.DataQuery
+import com.morpheusdata.core.util.ComputeUtility
+import com.morpheusdata.model.Account
+import com.morpheusdata.model.Backup
 import com.morpheusdata.model.BackupJob
 import com.morpheusdata.model.BackupProvider
+import com.morpheusdata.model.BackupResult
 import com.morpheusdata.model.ReferenceData
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
@@ -190,7 +197,79 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
      */
     @Override
     ServiceResponse executeBackupJob(BackupJob backupJob, Map opts) {
-        ServiceResponse.success()
+        log.debug("executeBackupJob: {}, {}", backupJob, opts)
+        ServiceResponse<List<BackupExecutionResponse>> rtn = ServiceResponse.prepare(new ArrayList<BackupExecutionResponse>())
+        if(!backupJob.backupProvider?.enabled) {
+            return ServiceResponse.error("Commvault backup integration is disabled")
+        }
+
+        def results
+        try {
+            def backupProvider = backupJob.backupProvider
+            def authConfig = plugin.getAuthConfig(backupProvider)
+            if(authConfig) {
+                def subclientId = backupJob.internalId
+                results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
+                log.debug("executeBackupJob result: {}", results)
+
+                if(!results.success) {
+                    if(results.errorCode == 2) {
+                        // the job is already running, capture the job id
+                        def jobConfig = backupJob?.getConfigMap()
+                        if(jobConfig) {
+                            return CommvaultBackupUtility.captureActiveSubclientBackup(authConfig, jobConfig.subclientId, jobConfig.clientId, jobConfig.backupsetId)
+                        }
+                        if(!results.backupJobId) {
+                            return ServiceResponse.error("Failed to capture active id for backup job ${backupJob.id}")
+
+                        }
+                    } else {
+                        log.error("Failed to execute backup job ${backupJob.id}")
+                        return ServiceResponse.error("Failed to execute backup job ${backupJob.id}", results)
+                    }
+                }
+
+                Account tmpAccount = opts.account ?: backupJob.account
+
+                List<Backup> allJobBackups = morpheusContext.services.backup.list(new DataQuery()
+                        .withFilter('account.id', tmpAccount.id)
+                        .withFilter('backupJob.id', backupJob.id)
+                )
+                List<Backup> jobBackups = []
+                allJobBackups.each { Backup backup ->
+                    if (!opts.user || backup.createdBy?.id == opts.user.id) {
+                        jobBackups << backup
+                    }
+                }
+
+                jobBackups.each { backup ->
+                    try {
+                        BackupResult backupResult = new BackupResult(backup: backup)
+                        backupResult.backupType = "default"
+                        backupResult.backupSetId = results.backupSetId ?: BackupResultUtility.generateBackupResultSetId()
+                        backupResult.externalId = results.backupJobId
+                        backupResult.setConfigProperty("id", BackupResultUtility.generateBackupResultSetId())
+                        backupResult.setConfigProperty("backupJobId", results.backupJobId)
+                        backupResult.status = results.result ? CommvaultReferenceUtility.getBackupStatus(results.result) : BackupResult.Status.IN_PROGRESS
+                        backupResult.sizeInMb = (results.totalSize ?: 0) / ComputeUtility.ONE_MEGABYTE
+
+                        def executionResponse = new BackupExecutionResponse(backupResult)
+                        executionResponse.updates = true
+                        rtn.data.add(executionResponse)
+                    } catch(Exception ex) {
+                        log.error("Failed to create backup result backup ${backup.id}", ex)
+                        return ServiceResponse.error("Failed to create backup result for backup ${backup.id}")
+                    }
+                }
+                rtn.success = true
+            } else {
+                return ServiceResponse.error("Authentication information not found.")
+            }
+        } catch(e) {
+            log.error("Failed to execute backup job ${backupJob.id}: ${e}", e)
+            return ServiceResponse.error("Failed to execute backup job ${backupJob.id}")
+        }
+        return rtn
     }
 
     def getDefaultBackupSet(BackupProvider backupProvider, ReferenceData client) {
