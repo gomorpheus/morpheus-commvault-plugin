@@ -136,51 +136,33 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse deleteBackupResult(BackupResult backupResult, Map opts) {
-//		return ServiceResponse.success()
 		log.debug("deleting backup result {}", backupResult)
-		log.info("RAZI :: backupResult: ${backupResult}")
-		log.info("RAZI :: opts: ${opts}")
 		def rtn = [success:false]
-		//
-		// if(!backupResult.backup.getConfigProperty('vmSubclientId') && !backupResult.getConfigProperty('parentJobId')) {
-		// 	return ServiceResponse.success("Unable to delete backup result: client job reference not found.")
-		// }
 
-//		def backupProvider = getBackupProvider(backupResult.backup)
 		def backupProvider = backupResult.backup?.backupProvider
 		def authConfig = plugin.getAuthConfig(backupProvider)
-		log.info("RAZI :: authConfig: ${authConfig}")
 		def storagePolicyId = backupResult.backup?.backupJob?.getConfigProperty('storagePolicyId')
-		log.info("RAZI :: storagePolicyId: ${storagePolicyId}")
-//		def storagePolicy = ReferenceData.where { category == "${backupProvider.type.code}.backup.storagePolicy.${backupProvider.id}" && externalId == storagePolicyId }.get()
+
 		def storagePolicy = morpheusContext.services.referenceData.find(new DataQuery()
 				.withFilter("category", "${backupProvider.type.code}.backup.storagePolicy.${backupProvider.id}")
 				.withFilter("externalId", storagePolicyId))
+
 		def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty('backupJobId')
-		log.info("RAZI :: backupJobId: ${backupJobId}")
 
 		// con't delete job if active vm's were backed up on the same job
-//		def sharedSubclient = backupJobId ? (BackupResult.where { externalId != null && externalId == backupJobId && id != backupResult.id }.count() > 0) : false
 		def backupResultlist = morpheusContext.services.backup.backupResult.list(new DataQuery()
 				.withFilter("externalId", "!=", null)
 				.withFilter("externalId", backupJobId)
 				.withFilter("id", "!=", backupResult.id))
-		log.info("RAZI :: backupResultlist: ${backupResultlist}")
+
 		def sharedSubclient = backupJobId ? backupResultlist.size() > 0 : false
-		log.info("RAZI :: sharedSubclient: ${sharedSubclient}")
-		log.info("RAZI :: storagePolicyName: ${storagePolicy.getConfigProperty("name")}")
-		log.info("RAZI :: storagePolicyCopyName: ${storagePolicy.getConfigProperty("copyName")}")
 		if(backupJobId && storagePolicy && !sharedSubclient) {
-			log.info("RAZI :: inside if(backupJobId && storagePolicy && !sharedSubclient)")
 			rtn = CommvaultBackupUtility.deleteJob(authConfig, backupJobId, [storagePolicyName: storagePolicy.getConfigProperty("name"), storagePolicyCopyName: storagePolicy.getConfigProperty("copyName")])
-			log.info("RAZI :: inside if(backupJobId && storagePolicy && !sharedSubclient) -> rtn: ${rtn}")
 
 		} else {
-			log.info("RAZI :: inside if(backupJobId && storagePolicy && !sharedSubclient) -> else")
 			rtn.success = true
 		}
 
-//		return rtn
 		return ServiceResponse.create(rtn)
 	}
 
