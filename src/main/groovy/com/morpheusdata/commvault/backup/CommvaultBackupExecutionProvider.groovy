@@ -136,7 +136,34 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse deleteBackupResult(BackupResult backupResult, Map opts) {
-		return ServiceResponse.success()
+		log.debug("deleting backup result {}", backupResult)
+		def rtn = [success:false]
+
+		def backupProvider = backupResult.backup?.backupProvider
+		def authConfig = plugin.getAuthConfig(backupProvider)
+		def storagePolicyId = backupResult.backup?.backupJob?.getConfigProperty('storagePolicyId')
+
+		def storagePolicy = morpheusContext.services.referenceData.find(new DataQuery()
+				.withFilter("category", "${backupProvider.type.code}.backup.storagePolicy.${backupProvider.id}")
+				.withFilter("externalId", storagePolicyId))
+
+		def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty('backupJobId')
+
+		// con't delete job if active vm's were backed up on the same job
+		def backupResultlist = morpheusContext.services.backup.backupResult.list(new DataQuery()
+				.withFilter("externalId", "!=", null)
+				.withFilter("externalId", backupJobId)
+				.withFilter("id", "!=", backupResult.id))
+
+		def sharedSubclient = backupJobId ? backupResultlist.size() > 0 : false
+		if(backupJobId && storagePolicy && !sharedSubclient) {
+			rtn = CommvaultBackupUtility.deleteJob(authConfig, backupJobId, [storagePolicyName: storagePolicy.getConfigProperty("name"), storagePolicyCopyName: storagePolicy.getConfigProperty("copyName")])
+
+		} else {
+			rtn.success = true
+		}
+
+		return ServiceResponse.create(rtn)
 	}
 
 	/**
