@@ -123,7 +123,70 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse deleteBackup(Backup backup, Map opts) {
-		return ServiceResponse.success()
+//		return ServiceResponse.success()
+		log.info("RAZI :: backup: ${backup}")
+		log.info("RAZI :: opts: ${opts}")
+		def rtn = [success:false]
+		try {
+			def backupProvider = backup.backupProvider
+			def authConfig = plugin.getAuthConfig(backupProvider)
+			log.info("RAZI :: authConfig: ${authConfig}")
+
+//			def server = backup.containerId ? Container.get(backup.containerId)?.server : null
+			log.info("RAZI :: backup.containerId: ${backup.containerId}")
+			def workload = morpheusContext.services.workload.get(backup.containerId)
+			log.info("RAZI :: workload.server: ${workload.server}")
+			def server = backup.containerId ? workload.server : null
+			if(server) {
+				def subclientId = backup.backupJob?.internalId
+				log.info("RAZI :: subclientId: ${subclientId}")
+				if(subclientId) {
+					def subclientResults = CommvaultBackupUtility.getSubclient(authConfig, subclientId)
+					log.info("RAZI :: subclientResults: ${subclientResults}")
+					if(subclientResults.success) {
+						log.info("RAZI :: subclientResults?.subclient: ${subclientResults?.subclient}")
+						log.info("RAZI :: subclientResults?.subclient?.vmContent: ${subclientResults?.subclient?.vmContent}")
+						log.info("RAZI :: subclientResults?.subclient?.vmContent?.children: ${subclientResults?.subclient?.vmContent?.children}")
+						def subclientVM = subclientResults?.subclient?.vmContent?.children?.find { it.name == server.externalId || it.name == server.internalId }
+						log.info("RAZI :: subclientVM: ${subclientVM}")
+						if(subclientVM) {
+							rtn = CommvaultBackupUtility.removeVMFromSubclient(authConfig, subclientId, subclientVM.name, backup.name)
+							log.info("RAZI :: if(subclientVM) -> rtn: ${rtn}")
+							if(rtn.errorCode && !rtn.success) {
+								rtn.success = true //this means its probably not found
+							}
+						} else {
+							rtn.success = true
+						}
+					} else if(rtn.statusCode == 404) {
+						rtn.success = true
+//						return rtn
+						return ServiceResponse.create(rtn)
+					}
+				}
+
+				// delete the on-demand backup subclient
+				def vmSubclientId = backup.getConfigProperty("vmSubclientId")
+				log.info("RAZI :: vmSubclientId: ${vmSubclientId}")
+				if(vmSubclientId) {
+					def deleteSubclient = CommvaultBackupUtility.deleteSubclient(authConfig, vmSubclientId)
+					log.info("RAZI :: deleteSubclient: ${deleteSubclient}")
+				}
+
+				log.info("RAZI :: server.internalId: ${server.internalId}")
+				def deleteVMClient = CommvaultBackupUtility.deleteVMClient(authConfig, server.internalId)
+				log.info("RAZI :: deleteVMClient: ${deleteVMClient}")
+			} else {
+				rtn.success = true
+				rtn.msg = "Could not find source resource"
+			}
+		} catch (Throwable t) {
+			log.error(t.message, t)
+			throw new RuntimeException("Unable to remove backup:${t.message}", t)
+		}
+//		return rtn
+		log.info("RAZI :: deleteBackup -> last rtn: ${rtn}")
+		return ServiceResponse.create(rtn)
 	}
 
 	/**

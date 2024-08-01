@@ -563,11 +563,14 @@ class CommvaultBackupUtility {
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		def vmQuery = [guid: vmGuid]
 		def vmResults = callApi(authConfig.apiUrl, "${authConfig.basePath}/VM", authConfig.token, [format:'xml', query: vmQuery], 'GET')
+		log.info("RAZI :: deleteVMClient -> vmResults: ${vmResults}")
 		if(vmResults.success) {
 			def vmResponse = new XmlSlurper().parseText(vmResults?.content)
 			def clientId = vmResponse.vmStatusInfoList.client['@clientId']
+			log.info("RAZI :: deleteVMClient -> clientId: ${clientId}")
 			if(clientId && clientId != "") {
 				def results = callApi(authConfig.apiUrl, "${authConfig.basePath}/Client/${clientId}", authConfig.token, [format:'xml'], 'DELETE')
+				log.info("RAZI :: deleteVMClient -> results: ${results}")
 				if(results.success) {
 					rtn.success = true
 				}
@@ -648,6 +651,7 @@ class CommvaultBackupUtility {
 			requestOpts.readTimeout = opts.readTimeout
 			requestOpts.queryParams = opts.query
 
+			log.info("RAZI :: opts.format: ${opts.format}")
 			if(opts.format == 'json') {
 				rtn = httpApiClient.callJsonApi(url, path, null, null, requestOpts, method)
 			} else if(opts.format == 'text/xml') {
@@ -664,6 +668,7 @@ class CommvaultBackupUtility {
 			} else {
 				rtn = httpApiClient.callXmlApi(url, path, null, null, requestOpts, method)
 			}
+			log.info("RAZI :: callApi -> rtn: ${rtn}")
 			if(rtn.success == false && rtn.errorCode && !rtn.errors) {
 				rtn.errors = getApiResultsErrorMessage(rtn.data)
 			} else if(rtn.success == false && !rtn.errorCode) {
