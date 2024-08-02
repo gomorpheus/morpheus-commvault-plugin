@@ -300,7 +300,9 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 						}
 						//restore.save(flush:true)
 						//morpheusContext.services.backup.backupRestore.save(backupRestore)
+
 						finalizeRestore(backupRestore)
+						//backupRestore.status = BackupResult.Status.SUCCEEDED.toString()
 					} else {
 						log.info("Ray :: syncBackupRestoreResult: inside else")
 						if(startDate && endDate) {
