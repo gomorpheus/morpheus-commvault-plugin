@@ -130,10 +130,10 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 		try {
 			def backupProvider = backup.backupProvider
 			def authConfig = plugin.getAuthConfig(backupProvider)
-			log.info("RAZI :: authConfig: ${authConfig}")
+			log.info("RAZI :: deleteBackup -> authConfig: ${authConfig}")
 
 //			def server = backup.containerId ? Container.get(backup.containerId)?.server : null
-			log.info("RAZI :: backup.containerId: ${backup.containerId}")
+			log.info("RAZI :: deleteBackup -> backup.containerId: ${backup.containerId}")
 			def workload = morpheusContext.services.workload.get(backup.containerId)
 			log.info("RAZI :: workload.server: ${workload.server}")
 			def server = backup.containerId ? workload.server : null
@@ -375,6 +375,13 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 						return rtn
 					}
 				}
+				// disable cloud init and clear cache to force cloud init on restore
+				if(computeServer.sourceImage && computeServer.sourceImage.isCloudInit && computeServer.serverOs?.platform != 'windows') {
+					log.info("RAZI :: executeBackup -> sourceImage: {}, isCloudInit: {}, platform: {}",
+							computeServer.sourceImage, computeServer.sourceImage.isCloudInit, computeServer.serverOs?.platform)
+					morpheusContext.executeCommandOnServer(computeServer, 'sudo rm -f /etc/cloud/cloud.cfg.d/99-manual-cache.cfg; sudo cp /etc/machine-id /tmp/machine-id-old ; sync', true, computeServer.sshUsername, computeServer.sshPassword, null, null, null, null, true, true).blockingGet()
+					log.info("RAZI :: executeBackup -> executeCommandOnServer called SUCCESS")
+				}
 				results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
 
 				if(!results.success) {
@@ -458,6 +465,21 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				}
 				rtn.data.updates = true
 				rtn.success = true
+
+				// backup completed, re-enable cloud-init
+				log.info("RAZI :: refreshBackupResult -> status: ${rtn.data.backupResult.status}")
+				if([BackupResult.Status.FAILED.toString(), BackupResult.Status.CANCELLED.toString(), BackupResult.Status.SUCCEEDED.toString()].contains(rtn.data.backupResult.status)) {
+					Long computeServerId = backupResult.serverId
+					log.info("RAZI :: computeServerId: ${computeServerId}")
+					ComputeServer computeServer = morpheusContext.services.computeServer.get(computeServerId)
+					if(computeServer && computeServer.sourceImage && computeServer.sourceImage.isCloudInit && computeServer.serverOs?.platform != 'windows') {
+						log.info("RAZI :: refreshBackupResult -> sourceImage: {}, isCloudInit: {}, platform: {}",
+								computeServer.sourceImage, computeServer.sourceImage.isCloudInit, computeServer.serverOs?.platform)
+						morpheusContext.executeCommandOnServer(computeServer, "sudo bash -c \"echo 'manual_cache_clean: True' >> /etc/cloud/cloud.cfg.d/99-manual-cache.cfg\"; sudo cat /tmp/machine-id-old > /etc/machine-id ; sudo rm /tmp/machine-id-old ; sync", true, computeServer.sshUsername, computeServer.sshPassword, null, null, null, null, true, true).blockingGet()
+						log.info("RAZI :: refreshBackupResult -> executeCommandOnServer called SUCCESS")
+					}
+
+				}
 
 			}
 			logoutSession(authConfig)
