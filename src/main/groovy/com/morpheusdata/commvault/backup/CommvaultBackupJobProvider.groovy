@@ -185,21 +185,14 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
      */
     @Override
     ServiceResponse deleteBackupJob(BackupJob backupJob, Map opts) {
-//        ServiceResponse.success()
         def rtn = [success:false]
         try {
             def backupProvider = backupJob.backupProvider
             def authConfig = plugin.getAuthConfig(backupProvider)
-            log.info("RAZI :: authConfig: ${authConfig}")
 
-            log.info("RAZI :: backupJob.internalId: ${backupJob.internalId}")
             rtn = CommvaultBackupUtility.deleteSubclient(authConfig, backupJob.internalId)
-            log.info("RAZI :: deleteSubclient -> rtn: ${rtn}")
             if(!rtn.success) {
-                log.info("RAZI :: inside if(!rtn.success)")
                 def subclientResponse = CommvaultBackupUtility.getSubclient(authConfig, backupJob.internalId)
-                log.info("RAZI :: subclientResponse.success: ${subclientResponse.success}")
-                log.info("RAZI :: subclientResponse.statusCode: ${subclientResponse.statusCode}")
                 if(!subclientResponse.success && subclientResponse.statusCode == 404) {
                     rtn.success = true
                 }
@@ -208,7 +201,6 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
             log.error(t.message, t)
             throw new RuntimeException("Unable to remove backup job:${t.message}", t)
         }
-        log.info("RAZI :: deleteBackupJob -> last rtn: ${rtn}")
         return ServiceResponse.create(rtn)
     }
 
