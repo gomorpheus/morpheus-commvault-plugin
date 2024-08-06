@@ -184,8 +184,24 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
      * operation on the external system failed and will halt any further processing in Morpheus.
      */
     @Override
-    ServiceResponse deleteBackupJob(BackupJob backupJobModel, Map opts) {
-        ServiceResponse.success()
+    ServiceResponse deleteBackupJob(BackupJob backupJob, Map opts) {
+        def rtn = [success:false]
+        try {
+            def backupProvider = backupJob.backupProvider
+            def authConfig = plugin.getAuthConfig(backupProvider)
+
+            rtn = CommvaultApiUtility.deleteSubclient(authConfig, backupJob.internalId)
+            if(!rtn.success) {
+                def subclientResponse = CommvaultApiUtility.getSubclient(authConfig, backupJob.internalId)
+                if(!subclientResponse.success && subclientResponse.statusCode == 404) {
+                    rtn.success = true
+                }
+            }
+        } catch (Throwable t) {
+            log.error(t.message, t)
+            throw new RuntimeException("Unable to remove backup job:${t.message}", t)
+        }
+        return ServiceResponse.create(rtn)
     }
 
     /**

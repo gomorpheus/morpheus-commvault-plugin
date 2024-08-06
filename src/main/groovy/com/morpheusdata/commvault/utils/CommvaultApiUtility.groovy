@@ -665,7 +665,7 @@ class CommvaultApiUtility {
 				rtn = httpApiClient.callXmlApi(url, path, null, null, requestOpts, method)
 			}
 			if(rtn.success == false && rtn.errorCode && !rtn.errors) {
-				rtn.errors = getApiResultsErrorMessage(rtn.data)
+				rtn.msg = getApiResultsErrorMessage(rtn.data)
 			} else if(rtn.success == false && !rtn.errorCode) {
 				// attempt to set the response error code and message
 				def responseError = getApiResultsError(rtn.data)

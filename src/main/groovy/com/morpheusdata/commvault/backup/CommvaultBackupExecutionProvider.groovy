@@ -123,7 +123,50 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse deleteBackup(Backup backup, Map opts) {
-		return ServiceResponse.success()
+		log.debug("deleteBackup :: backup: {}, opts: {}", backup, opts)
+		def rtn = [success:false]
+		try {
+			def backupProvider = backup.backupProvider
+			def authConfig = plugin.getAuthConfig(backupProvider)
+
+			def workload = morpheusContext.services.workload.get(backup.containerId)
+			def server = backup.containerId ? workload.server : null
+			if(server) {
+				def subclientId = backup.backupJob?.internalId
+				if(subclientId) {
+					def subclientResults = CommvaultApiUtility.getSubclient(authConfig, subclientId)
+					if(subclientResults.success) {
+						def subclientVM = subclientResults?.subclient?.vmContent?.children?.find { it.name == server.externalId || it.name == server.internalId }
+						if(subclientVM) {
+							rtn = CommvaultApiUtility.removeVMFromSubclient(authConfig, subclientId, subclientVM.name, backup.name)
+							if(rtn.errorCode && !rtn.success) {
+								rtn.success = true //this means its probably not found
+							}
+						} else {
+							rtn.success = true
+						}
+					} else if(rtn.statusCode == 404) {
+						rtn.success = true
+						return ServiceResponse.create(rtn)
+					}
+				}
+
+				// delete the on-demand backup subclient
+				def vmSubclientId = backup.getConfigProperty("vmSubclientId")
+				if(vmSubclientId) {
+					CommvaultApiUtility.deleteSubclient(authConfig, vmSubclientId)
+				}
+
+				CommvaultApiUtility.deleteVMClient(authConfig, server.internalId)
+			} else {
+				rtn.success = true
+				rtn.msg = "Could not find source resource"
+			}
+		} catch (Throwable t) {
+			log.error(t.message, t)
+			throw new RuntimeException("Unable to remove backup:${t.message}", t)
+		}
+		return ServiceResponse.create(rtn)
 	}
 
 	/**
@@ -312,6 +355,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 						return rtn
 					}
 				}
+
 				results = CommvaultApiUtility.backupSubclient(authConfig, subclientId)
 
 				if(!results.success) {
