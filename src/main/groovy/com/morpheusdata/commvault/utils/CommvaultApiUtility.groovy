@@ -7,7 +7,7 @@ import groovy.util.logging.Slf4j
 import groovy.xml.XmlSlurper
 
 @Slf4j
-class CommvaultBackupUtility {
+class CommvaultApiUtility {
 
 	// backup servers
 	static listClients(authConfig){
@@ -710,7 +710,7 @@ class CommvaultBackupUtility {
 	}
 
 	static captureActiveSubclientBackup(authConfig, subclientId, clientId, backupsetId) {
-		def activeJobsResults = CommvaultBackupUtility.getBackupJobs(authConfig, subclientId, [query: [clientId: clientId, backupsetId: backupsetId, jobFilter: "Backup", jobCategory: "Active"]])
+		def activeJobsResults = CommvaultApiUtility.getBackupJobs(authConfig, subclientId, [query: [clientId: clientId, backupsetId: backupsetId, jobFilter: "Backup", jobCategory: "Active"]])
 		if(activeJobsResults.success && activeJobsResults.results.size() > 0) {
 			def activeBackupJob = activeJobsResults.results.find { it.clientId == clientId && it.subclientId == subclientId && it.backupsetId == backupsetId }
 			return ServiceResponse.success([backupJobId: activeBackupJob.backupJobId])

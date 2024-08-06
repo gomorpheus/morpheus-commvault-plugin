@@ -1,7 +1,7 @@
 package com.morpheusdata.commvault.sync
 
 import com.morpheusdata.commvault.CommvaultPlugin
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.util.SyncTask
@@ -35,7 +35,7 @@ class BackupSetsSync {
             ).toList().blockingGet()
 
             clients.each { client ->
-                def listResults = CommvaultBackupUtility.listBackupSets(authConfig, client)
+                def listResults = CommvaultApiUtility.listBackupSets(authConfig, client)
                 if(listResults.success) {
                     ArrayList<Map> cloudItems = listResults.backupSets
                     def objCategory = "${backupProviderModel.type.code}.backup.backupSet.${backupProviderModel.id}.${client.id}"

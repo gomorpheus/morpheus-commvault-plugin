@@ -1,7 +1,7 @@
 package com.morpheusdata.commvault.sync
 
 import com.morpheusdata.commvault.CommvaultPlugin
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.core.BulkCreateResult
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataQuery
@@ -35,7 +35,7 @@ class SubclientsSync {
                     .withFilter('category', "${backupProviderModel.type.code}.backup.backupServer.${backupProviderModel.id}")
             ).toList().blockingGet()
 
-            def listResults = CommvaultBackupUtility.listSubclients(authConfig, refDataList)
+            def listResults = CommvaultApiUtility.listSubclients(authConfig, refDataList)
             if(listResults.success) {
                 ArrayList<Map> cloudItems = listResults.subclients.findAll { !it.name.endsWith("-cvvm") }
                 Observable<BackupJobIdentityProjection> existingItems = morpheusContext.async.backupJob.listIdentityProjections(backupProviderModel)
