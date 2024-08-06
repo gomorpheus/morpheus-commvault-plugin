@@ -9,7 +9,7 @@ import com.morpheusdata.commvault.sync.BackupSetsSync
 import com.morpheusdata.commvault.sync.ClientSync
 import com.morpheusdata.commvault.sync.StoragePoliciesSync
 import com.morpheusdata.commvault.sync.SubclientsSync
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.AbstractBackupProvider
 import com.morpheusdata.core.backup.BackupJobProvider
@@ -339,7 +339,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	def loginSession(String apiUrl, String username, String password) {
 		def rtn = [success: false]
-		def response = CommvaultBackupUtility.getToken(apiUrl, username, password)
+		def response = CommvaultApiUtility.getToken(apiUrl, username, password)
 		if(response.success) {
 			rtn.success = true
 			rtn.token = response.token
@@ -353,7 +353,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 
 	def logoutSession(String apiUrl, String token) {
 		if(token) {
-			CommvaultBackupUtility.logout(apiUrl, token)
+			CommvaultApiUtility.logout(apiUrl, token)
 		}
 	}
 

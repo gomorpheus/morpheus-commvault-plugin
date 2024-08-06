@@ -1,7 +1,7 @@
 package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.commvault.CommvaultPlugin
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupJobProvider
@@ -93,10 +93,10 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
                 if (opts.commvaultStoragePolicy) {
                     def storagePolicy = morpheusContext.services.referenceData.get(opts.commvaultStoragePolicy?.toLong())
                     def jobName = backupJob.name + "-${backupJob.account.id}"
-                    def result = CommvaultBackupUtility.createSubclient(authConfig, client.name, jobName, [backupSet: backupSet, storagePolicy: storagePolicy])
+                    def result = CommvaultApiUtility.createSubclient(authConfig, client.name, jobName, [backupSet: backupSet, storagePolicy: storagePolicy])
                     log.debug("createBackupJob: createSubclient result: " + result)
                     if (result?.subclientId) {
-                        def subclientResult = CommvaultBackupUtility.getSubclient(authConfig, result.subclientId)
+                        def subclientResult = CommvaultApiUtility.getSubclient(authConfig, result.subclientId)
                         backupJob.externalId = subclientResult?.subclient?.subClientEntity?.subclientGUID
                         backupJob.internalId = result.subclientId
                         backupJob.setConfigProperty('subclientId', result.subclientId)
@@ -209,7 +209,7 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
             def authConfig = plugin.getAuthConfig(backupProvider)
             if(authConfig) {
                 def subclientId = backupJob.internalId
-                results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
+                results = CommvaultApiUtility.backupSubclient(authConfig, subclientId)
                 log.debug("executeBackupJob result: {}", results)
 
                 if(!results.success) {
@@ -217,7 +217,7 @@ class CommvaultBackupJobProvider implements BackupJobProvider {
                         // the job is already running, capture the job id
                         def jobConfig = backupJob?.getConfigMap()
                         if(jobConfig) {
-                            return CommvaultBackupUtility.captureActiveSubclientBackup(authConfig, jobConfig.subclientId, jobConfig.clientId, jobConfig.backupsetId)
+                            return CommvaultApiUtility.captureActiveSubclientBackup(authConfig, jobConfig.subclientId, jobConfig.clientId, jobConfig.backupsetId)
                         }
                         if(!results.backupJobId) {
                             return ServiceResponse.error("Failed to capture active id for backup job ${backupJob.id}")
