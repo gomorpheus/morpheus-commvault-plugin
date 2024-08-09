@@ -397,135 +397,81 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 			log.info("Ray :: finalizeRestore: server?.id: ${server?.id}")
 			log.info("Ray :: finalizeRestore: server?.name: ${server?.name}")
 			// get the severed discovered by cloud sync
-			ComputeServer matchedServer = morpheusContext.services.computeServer.find(
-					new DataQuery().withFilters(
-							new DataFilter('name', server.name),
-							new DataFilter('id', '!=', server.id)
-					)
-			)
-			log.info("Ray :: finalizeRestore: matchedServer: ${matchedServer}")
-			log.info("Ray :: finalizeRestore: matchedServer?.id: ${matchedServer?.id}")
-			log.info("Ray :: finalizeRestore: server?.name: ${server?.name}")
-			// if a match is found, updated the target workoad with the cloud ids
-			//log.info("finalizeRestore: targetWorkload: ${server.id} matchedServer: ${matchedServer?.id}")
-			if(matchedServer) {
-				server.externalId = matchedServer.externalId
-				server.internalId = matchedServer.internalId
-				server.uniqueId = matchedServer.uniqueId
-				log.info("Ray :: finalizeRestore: matchedServer.externalId: ${matchedServer.externalId}")
-				log.info("Ray :: finalizeRestore: matchedServer.internalId: ${matchedServer.internalId}")
-				log.info("Ray :: finalizeRestore: matchedServer.uniqueId: ${matchedServer.uniqueId}")
-				morpheusContext.services.computeServer.save(server)
-				log.info("Ray :: finalizeRestore: restore.getConfigPropert: ${restore.getConfigProperty("restoreType")}")
-				def restoreToNew = restore.getConfigProperty("restoreType") == "new"
-				log.info("Ray :: finalizeRestore: restoreToNew: ${restoreToNew}")
-				if(restoreToNew) {
-					// reset cloud-init and reload the local clout-init user data
-					log.info("Ray :: finalizeRestore: server?.cloud?.cloudType?.code: ${server?.cloud?.cloudType?.code}")
-					log.info("Ray :: finalizeRestore: server.sourceImage: ${server.sourceImage}")
-					log.info("Ray :: finalizeRestore: server.sourceImage.isCloudInit: ${server.sourceImage.isCloudInit}")
-					log.info("Ray :: finalizeRestore: server.serverOs?.platform: ${server.serverOs?.platform}")
-					if(server?.cloud?.cloudType?.code == 'vmware' && server.sourceImage && server.sourceImage.isCloudInit && server.serverOs?.platform != 'windows') {
-						morpheusContext.executeCommandOnServer(server, "sudo cloud-init clean --logs; sudo cloud-init init --local; sync", [guestExec: true])
-						//VmwareComputeUtility.stopVm(authConfig.apiUrl, authConfig.apiUsername, authConfig.apiPassword, [externalId:server.externalId])
-						//VmwareComputeUtility.startVm(authConfig.apiUrl, authConfig.apiUsername, authConfig.apiPassword, [externalId:server.externalId])
-						morpheusContext.async.computeServer.restartServer(server.id).subscribe().dispose()
+			if (!server.externalId && !server.uniqueId) {
+				ComputeServer matchedServer = morpheusContext.services.computeServer.find(
+						new DataQuery().withFilters(
+								new DataFilter('name', server.name),
+								new DataFilter('id', '!=', server.id)
+						)
+				)
+				log.info("Ray :: finalizeRestore: matchedServer: ${matchedServer}")
+				log.info("Ray :: finalizeRestore: matchedServer?.id: ${matchedServer?.id}")
+				log.info("Ray :: finalizeRestore: server?.name: ${server?.name}")
+				// if a match is found, updated the target workoad with the cloud ids
+				//log.info("finalizeRestore: targetWorkload: ${server.id} matchedServer: ${matchedServer?.id}")
+				if(matchedServer) {
+					server.externalId = matchedServer.externalId
+					server.internalId = matchedServer.internalId
+					server.uniqueId = matchedServer.uniqueId
+					log.info("Ray :: finalizeRestore: matchedServer.externalId: ${matchedServer.externalId}")
+					log.info("Ray :: finalizeRestore: matchedServer.internalId: ${matchedServer.internalId}")
+					log.info("Ray :: finalizeRestore: matchedServer.uniqueId: ${matchedServer.uniqueId}")
+					morpheusContext.services.computeServer.save(server)
+					log.info("Ray :: finalizeRestore: restore.getConfigPropert: ${restore.getConfigProperty("restoreType")}")
+					def restoreToNew = restore.getConfigProperty("restoreType") == "new"
+					log.info("Ray :: finalizeRestore: restoreToNew: ${restoreToNew}")
+					if(restoreToNew) {
+						// reset cloud-init and reload the local clout-init user data
+						log.info("Ray :: finalizeRestore: server?.cloud?.cloudType?.code: ${server?.cloud?.cloudType?.code}")
+						log.info("Ray :: finalizeRestore: server.sourceImage: ${server.sourceImage}")
+						log.info("Ray :: finalizeRestore: server.sourceImage.isCloudInit: ${server.sourceImage?.isCloudInit}")
+						log.info("Ray :: finalizeRestore: server.serverOs?.platform: ${server.serverOs?.platform}")
+						if(server.sourceImage?.isCloudInit && server.serverOs?.platform != 'windows') {
+							log.info("Ray :: finalizeRestore: before cmd execution")
+							//morpheusContext.executeCommandOnServer(server, "sudo cloud-init clean --logs; sudo cloud-init init --local; sync", [guestExec: true])
+							log.info("Ray :: finalizeRestore: server.sshUsername: ${server.id}")
+							log.info("Ray :: finalizeRestore: server.sshUsername: ${server.sshUsername}")
+							log.info("Ray :: finalizeRestore: server.sshUsername: ${server.sshPassword}")
+							def out = morpheusContext.executeCommandOnServer(server, "sudo cloud-init clean --logs; sudo cloud-init init --local; sync", true, server.sshUsername, server.sshPassword, null, null, null, null, true, true).blockingGet()
+							log.info("Ray :: finalizeRestore: out: ${out}")
+							log.info("Ray :: finalizeRestore: out?.success: ${out?.success}")
+							log.info("Ray :: finalizeRestore: out?.results: ${out?.results}")
+							log.info("Ray :: finalizeRestore: after cmd execution")
+							//VmwareComputeUtility.stopVm(authConfig.apiUrl, authConfig.apiUsername, authConfig.apiPassword, [externalId:server.externalId])
+							//VmwareComputeUtility.startVm(authConfig.apiUrl, authConfig.apiUsername, authConfig.apiPassword, [externalId:server.externalId])
+							log.info("Ray :: finalizeRestore: before server restart")
+							morpheusContext.async.computeServer.restartServer(server.id).subscribe().dispose()
+							log.info("Ray :: finalizeRestore: after server restart")
+						}
+
+
 					}
 
-					/*if(instance?.layout?.postProvisionService) {
-						// make sure to fail if post provision fails
-						try {
-							def postProvisionService = grailsApplication.mainContext[instance.layout.postProvisionService]
-							postProvisionService."${instance.layout.postProvisionOperation}"(instance)
-						} catch(Throwable t) {
-							log.error(t.message, t)
-							instance.status = Instance.Status.failed
-							instance.statusDate = new Date()
-							instance.save(flush: true)
-							throw t
-						}
-					}*/
-
-					log.info("Ray :: finalizeRestore: server?.cloud?.cloudType?.code1: ${server?.cloud?.cloudType?.code}")
-					log.info("Ray :: finalizeRestore: server?.serverOs?.vendor: ${server?.serverOs?.vendor}")
-					if(server?.cloud?.cloudType?.code == 'vmware' && server?.serverOs?.vendor == 'centos') {
-						log.debug("Finalizing restore: renew IP for CentOS VM.")
-						morpheusContext.executeCommandOnServer(server, "sudo dhclient", [guestExec: true])
-					}
-
-					// update the existing server with the new info
-					/*def serverDetail = vmwareComputeService.checkServerReady([zone: server.zone, externalId: server.externalId, server:server, modified:false])
-					if(serverDetail.success) {
-						def serverIp = serverDetail.results.server.ipAddress
-						if(serverIp != server.externalIp) {
-							if(server.externalIp == server.sshHost) {
-								server.sshHost = serverIp
-							}
-							server.externalIp = serverIp
-						}
-						if(serverIp != server.internalIp) {
-							if(server.internalIp == server.sshHost) {
-								server.sshHost = serverIp
-							}
-							server.internalIp = serverIp
-						}
-					}
-					server.save(flush:true)*/
 				}
-				// sync agent
-				sleep(4000l) // sometimes vmware tools lags to start up for agent install
-				//backupRestoreService.finalizeContainerRestore(targetContainer, opts)
-				log.info("Ray :: finalizeRestore: before calling finalizeRestore.........")
+				else {
+					restore.status = BackupRestore.Status.IN_PROGRESS.toString()
+					restore.endDate = null
+					morpheusContext.services.backup.backupRestore.save(restore)
+					log.info("Ray :: finalizeRestore: restore?.status3: ${restore?.status}")
+				}
+			}
+
+			log.info("Ray :: finalizeRestore: before calling finalizeRestore.........")
+			log.info("Ray :: finalizeRestore: server.externalIp: ${server.externalIp}")
+			if (server.externalIp) {
 				morpheusContext.async.backup.backupRestore.finalizeRestore(targetWorkload)
-				log.info("Ray :: finalizeRestore: after calling finalizeRestore.........")
-
-				// setup checks
-				//monitorCheckManagementService.updateChecksFromInstance(instance)
-
-				/*Restore.withNewSession { session ->
-					def restoreRecord = Restore.get(restoreId)
-					restoreRecord.status = BackupService.Status.SUCCEEDED.toString()
-					restoreRecord.endDate = new Date()
-					restoreRecord.lastUpdated = new Date()
-					restoreRecord.duration = restoreRecord.endDate.getTime() - restoreRecord.startDate.getTime()
-					restoreRecord.save(flush: true)
-				}*/
 				restore.status = BackupRestore.Status.SUCCEEDED.toString()
 				restore.endDate = new Date()
 				restore.lastUpdated = new Date()
 				restore.duration = restore.endDate.getTime() - restore.startDate.getTime()
 				morpheusContext.services.backup.backupRestore.save(restore)
 				log.info("Ray :: finalizeRestore: restore?.status2: ${restore?.status}")
-
-
-				/*if(server) {
-					serverService.updateServerStatus(server, "provisioned")
-				}*/
-
-				// notify completion of this instance provisioning
-				//sendRabbitMessage('main', 'instance.event', 'event.instance.provisioned', [instanceId:instance.id])
 			}
-			else {
-				restore.status = BackupRestore.Status.IN_PROGRESS.toString()
-				restore.endDate = null
-				morpheusContext.services.backup.backupRestore.save(restore)
-				log.info("Ray :: finalizeRestore: restore?.status3: ${restore?.status}")
-			}
+			log.info("Ray :: finalizeRestore: after calling finalizeRestore.........")
+
 		} catch(e) {
 			log.error("Ray :: Error in finalizeRestore: ${e}", e)
-			/*Instance.withNewSession { session ->
-				def instanceRecord = Instance.get(instanceId)
-				instanceRecord?.status = Instance.Status.failed
-				instanceRecord?.save(flush: true)
 
-				// set restore status
-				def restoreRecord = Restore.get(restore.id)
-				restoreRecord.status = BackupService.Status.FAILED.toString()
-				restoreRecord.endDate = new Date()
-				restoreRecord.lastUpdated = new Date()
-				restoreRecord.duration = restoreRecord.endDate.getTime() - restoreRecord.startDate.getTime()
-				restoreRecord.save(flush: true)
-			}*/
 			def instanceRecord = morpheusContext.services.instance.get(instanceId)
 			instanceRecord.status = Instance.Status.failed
 			morpheusContext.services.instance.save(instanceRecord)
