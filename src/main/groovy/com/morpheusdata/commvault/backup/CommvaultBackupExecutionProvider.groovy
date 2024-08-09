@@ -1,7 +1,7 @@
 package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.commvault.CommvaultPlugin
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupExecutionProvider
@@ -101,7 +101,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				def subClientId = backupJob.internalId
 				def vmClientId = (server.internalId ?: server.externalId) // use vmware internal ID, move this to the backup type service when split out.
 				def vmClientName = server.name + "_" + server.externalId
-				def results = CommvaultBackupUtility.addVMToSubclient(authConfig, subClientId, vmClientId, vmClientName)
+				def results = CommvaultApiUtility.addVMToSubclient(authConfig, subClientId, vmClientId, vmClientName)
 				log.debug("results: ${results}")
 				if (results.success == true) {
 					rtn.success = true
@@ -123,7 +123,50 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 	 */
 	@Override
 	ServiceResponse deleteBackup(Backup backup, Map opts) {
-		return ServiceResponse.success()
+		log.debug("deleteBackup :: backup: {}, opts: {}", backup, opts)
+		def rtn = [success:false]
+		try {
+			def backupProvider = backup.backupProvider
+			def authConfig = plugin.getAuthConfig(backupProvider)
+
+			def workload = morpheusContext.services.workload.get(backup.containerId)
+			def server = backup.containerId ? workload.server : null
+			if(server) {
+				def subclientId = backup.backupJob?.internalId
+				if(subclientId) {
+					def subclientResults = CommvaultApiUtility.getSubclient(authConfig, subclientId)
+					if(subclientResults.success) {
+						def subclientVM = subclientResults?.subclient?.vmContent?.children?.find { it.name == server.externalId || it.name == server.internalId }
+						if(subclientVM) {
+							rtn = CommvaultApiUtility.removeVMFromSubclient(authConfig, subclientId, subclientVM.name, backup.name)
+							if(rtn.errorCode && !rtn.success) {
+								rtn.success = true //this means its probably not found
+							}
+						} else {
+							rtn.success = true
+						}
+					} else if(rtn.statusCode == 404) {
+						rtn.success = true
+						return ServiceResponse.create(rtn)
+					}
+				}
+
+				// delete the on-demand backup subclient
+				def vmSubclientId = backup.getConfigProperty("vmSubclientId")
+				if(vmSubclientId) {
+					CommvaultApiUtility.deleteSubclient(authConfig, vmSubclientId)
+				}
+
+				CommvaultApiUtility.deleteVMClient(authConfig, server.internalId)
+			} else {
+				rtn.success = true
+				rtn.msg = "Could not find source resource"
+			}
+		} catch (Throwable t) {
+			log.error(t.message, t)
+			throw new RuntimeException("Unable to remove backup:${t.message}", t)
+		}
+		return ServiceResponse.create(rtn)
 	}
 
 	/**
@@ -157,7 +200,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 
 		def sharedSubclient = backupJobId ? backupResultlist.size() > 0 : false
 		if(backupJobId && storagePolicy && !sharedSubclient) {
-			rtn = CommvaultBackupUtility.deleteJob(authConfig, backupJobId, [storagePolicyName: storagePolicy.getConfigProperty("name"), storagePolicyCopyName: storagePolicy.getConfigProperty("copyName")])
+			rtn = CommvaultApiUtility.deleteJob(authConfig, backupJobId, [storagePolicyName: storagePolicy.getConfigProperty("name"), storagePolicyCopyName: storagePolicy.getConfigProperty("copyName")])
 
 		} else {
 			rtn.success = true
@@ -195,7 +238,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 		def rtn = [success:false]
 		try {
 			def subclientId = backupJob.internalId
-			def subclientResults = CommvaultBackupUtility.getSubclient(authConfig, subclientId)
+			def subclientResults = CommvaultApiUtility.getSubclient(authConfig, subclientId)
 
 			if(subclientResults.success && !subclientResults.errorCode) {
 				rtn.storagePolicyId = subclientResults.subclient?.commonProperties?.storageDevice?.dataBackupStoragePolicy?.storagePolicyId
@@ -212,7 +255,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 		def rtn = [success:false]
 		try {
 			def subclientId = backupJob.internalId
-			def subclientResults = CommvaultBackupUtility.getSubclient(authConfig, subclientId)
+			def subclientResults = CommvaultApiUtility.getSubclient(authConfig, subclientId)
 
 			if(subclientResults.success && !subclientResults.errorCode) {
 				rtn.backupsetId = subclientResults.subclient?.subClientEntity?.backupsetId
@@ -254,9 +297,9 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					.withFilter("internalId", storagePolicyId))
 			Workload workload = morpheus.services.workload.get(backup.containerId)
 			def server = workload.server
-			rtn = CommvaultBackupUtility.createSubclient(authConfig, client.name, "${backup.name}-cvvm", [backupSet: backupSet, storagePolicy: storagePolicy])
+			rtn = CommvaultApiUtility.createSubclient(authConfig, client.name, "${backup.name}-cvvm", [backupSet: backupSet, storagePolicy: storagePolicy])
 			if(rtn.success && rtn?.subclientId) {
-				def subclientResult = CommvaultBackupUtility.getSubclient(authConfig, rtn.subclientId)
+				def subclientResult = CommvaultApiUtility.getSubclient(authConfig, rtn.subclientId)
 
 				backup.setConfigProperty("vmSubclientId", rtn.subclientId)
 				backup.setConfigProperty("vmSubclientGuid", subclientResult?.subclient?.subClientEntity?.subclientGUID)
@@ -267,7 +310,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				morpheus.services.backup.save(backup)
 				def vmClientId = (server.internalId ?: server.externalId) // use vmware internal ID, move this to the backup type service when split out.
 				def vmClientName = server.name + "_" + server.externalId
-				CommvaultBackupUtility.addVMToSubclient(authConfig, rtn.subclientId, vmClientId, vmClientName)
+				CommvaultApiUtility.addVMToSubclient(authConfig, rtn.subclientId, vmClientId, vmClientName)
 			}
 
 		} catch(e) {
@@ -312,13 +355,14 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 						return rtn
 					}
 				}
-				results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
+
+				results = CommvaultApiUtility.backupSubclient(authConfig, subclientId)
 
 				if(!results.success) {
 					if(results.errorCode == 2) {
 						def backupConfigMap = backup.getConfigMap()
 						if(backupConfigMap) {
-							return CommvaultBackupUtility.captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
+							return CommvaultApiUtility.captureActiveSubclientBackup(authConfig, backupConfigMap.vmSubclientId, backupConfigMap.vmClientId, backupConfigMap.vmBackupSetId)
 						}
 						if(!results.backupJobId) {
 							rtn.error = "Failed to capture active id for backup job ${backup.id.id}"
@@ -373,7 +417,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 			Map backupJob = null
 
 			if(!backupJob && backupJobId) {
-				def result = CommvaultBackupUtility.getJob(authConfig, backupJobId)
+				def result = CommvaultApiUtility.getJob(authConfig, backupJobId)
 				backupJob = result.result
 			}
 
@@ -408,7 +452,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 
 	def logoutSession(String apiUrl, String token) {
 		if(token) {
-			CommvaultBackupUtility.logout(apiUrl, token)
+			CommvaultApiUtility.logout(apiUrl, token)
 		}
 	}
 
@@ -428,10 +472,10 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				def authConfig = plugin.getAuthConfig(backupProvider)
 				def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty("backupJobId")
 
-				def result = CommvaultBackupUtility.killBackupJob(authConfig, backupJobId)
+				def result = CommvaultApiUtility.killBackupJob(authConfig, backupJobId)
 				log.debug("cancelBackup : result: ${result}")
 				if (authConfig.token) {
-					CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
+					CommvaultApiUtility.logout(authConfig.apiUrl, authConfig.token)
 				}
 				response.success = result.success
 			} catch(e) {

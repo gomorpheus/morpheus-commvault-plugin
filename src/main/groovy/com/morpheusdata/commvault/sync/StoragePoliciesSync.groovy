@@ -1,6 +1,6 @@
 package com.morpheusdata.commvault.sync
 
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataFilter
 import com.morpheusdata.core.data.DataQuery
@@ -30,12 +30,12 @@ class StoragePoliciesSync {
     def execute() {
         log.debug("StoragePoliciesSync >> execute()")
         try {
-            def listResults = CommvaultBackupUtility.listStoragePolicies(this.authConfigMap)
+            def listResults = CommvaultApiUtility.listStoragePolicies(this.authConfigMap)
             log.debug("listResults.success: ${listResults.success}")
             if (listResults.success) {
                 def objList = listResults.storagePolicies
                 objList.each { storagePolicy ->
-                    def policyCopy = CommvaultBackupUtility.getStoragePolicyCopy(this.authConfigMap, storagePolicy.externalId)
+                    def policyCopy = CommvaultApiUtility.getStoragePolicyCopy(this.authConfigMap, storagePolicy.externalId)
                     storagePolicy.copyId = policyCopy.result?.externalId
                     storagePolicy.copyName = policyCopy.result?.name
                 }

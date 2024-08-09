@@ -7,7 +7,7 @@ import groovy.util.logging.Slf4j
 import groovy.xml.XmlSlurper
 
 @Slf4j
-class CommvaultBackupUtility {
+class CommvaultApiUtility {
 
 	// backup servers
 	static listClients(authConfig){
@@ -665,7 +665,7 @@ class CommvaultBackupUtility {
 				rtn = httpApiClient.callXmlApi(url, path, null, null, requestOpts, method)
 			}
 			if(rtn.success == false && rtn.errorCode && !rtn.errors) {
-				rtn.errors = getApiResultsErrorMessage(rtn.data)
+				rtn.msg = getApiResultsErrorMessage(rtn.data)
 			} else if(rtn.success == false && !rtn.errorCode) {
 				// attempt to set the response error code and message
 				def responseError = getApiResultsError(rtn.data)
@@ -710,7 +710,7 @@ class CommvaultBackupUtility {
 	}
 
 	static captureActiveSubclientBackup(authConfig, subclientId, clientId, backupsetId) {
-		def activeJobsResults = CommvaultBackupUtility.getBackupJobs(authConfig, subclientId, [query: [clientId: clientId, backupsetId: backupsetId, jobFilter: "Backup", jobCategory: "Active"]])
+		def activeJobsResults = getBackupJobs(authConfig, subclientId, [query: [clientId: clientId, backupsetId: backupsetId, jobFilter: "Backup", jobCategory: "Active"]])
 		if(activeJobsResults.success && activeJobsResults.results.size() > 0) {
 			def activeBackupJob = activeJobsResults.results.find { it.clientId == clientId && it.subclientId == subclientId && it.backupsetId == backupsetId }
 			return ServiceResponse.success([backupJobId: activeBackupJob.backupJobId])
