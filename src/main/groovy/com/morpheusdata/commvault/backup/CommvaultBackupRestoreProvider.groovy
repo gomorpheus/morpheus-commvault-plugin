@@ -1,7 +1,7 @@
 package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.commvault.CommvaultPlugin
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupRestoreProvider
@@ -149,7 +149,7 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 			}
 
 			def vmExternalId = originalContainer?.server?.internalId ?: restoreConfig?.server?.internalId
-			def results = CommvaultBackupUtility.restoreVM(authConfig, vmExternalId, backupResult.backup.backupJob, backupJobId, opts)
+			def results = CommvaultApiUtility.restoreVM(authConfig, vmExternalId, backupResult.backup.backupJob, backupJobId, opts)
 			log.debug("restoreBackup result: {}", results)
 			if (results.success) {
 				//update instance status to restoring
