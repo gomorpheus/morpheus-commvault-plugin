@@ -1,16 +1,14 @@
 package com.morpheusdata.commvault.backup
 
 import com.morpheusdata.commvault.CommvaultPlugin
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
+import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.backup.BackupRestoreProvider
 import com.morpheusdata.core.backup.response.BackupRestoreResponse
+import com.morpheusdata.core.data.DataFilter
 import com.morpheusdata.core.data.DataQuery
-import com.morpheusdata.model.Backup
-import com.morpheusdata.model.BackupRestore
-import com.morpheusdata.model.BackupResult
-import com.morpheusdata.model.Instance
-import com.morpheusdata.model.Workload
+import com.morpheusdata.model.*
 import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
@@ -116,123 +114,93 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 	 */
 	@Override
 	ServiceResponse restoreBackup(BackupRestore backupRestore, BackupResult backupResult, Backup backup, Map opts) {
-		log.info("Ray :: restoreBackup: backupRestore: ${backupRestore}")
-		log.info("Ray :: restoreBackup: backupResult: ${backupResult}")
-		log.info("Ray :: restoreBackup: backup: ${backup}")
-		log.info("Ray :: restoreBackup: opts: ${opts}")
+		log.debug("restoreBackup : opts: ${opts}")
 		ServiceResponse response = ServiceResponse.prepare(new BackupRestoreResponse(backupRestore))
-
-		log.info("Ray :: restoreBackup: backupResult.externalId: ${backupResult.externalId}")
-		log.info("Ray :: restoreBackup: backupResult.getConfigProperty('backupJobId'): ${backupResult.getConfigProperty('backupJobId')}")
 		def backupJobId = backupResult.externalId ?: backupResult.getConfigProperty('backupJobId')
-		log.info("Ray :: restoreBackup: backupJobId: ${backupJobId}")
-		//log.info("Restoring backupResult {} - opts: {}", backupResult, opts)
 		try {
-			log.info("Ray :: restoreBackup: backup.containerId: ${backup.containerId}")
 			def originalContainer = morpheusContext.services.workload.get(backup.containerId)
-			log.info("Ray :: restoreBackup: originalContainer?.id: ${originalContainer?.id}")
-			log.info("Ray :: restoreBackup: opts.containerId: ${opts.containerId}")
-			log.info("Ray :: restoreBackup: backup?.containerId: ${backup?.containerId}")
 			def containerId = opts.containerId ?: backup?.containerId
-			log.info("Ray :: restoreBackup: containerId: ${containerId}")
 			def backupProvider = backup.backupProvider
-			log.info("Ray :: restoreBackup: backupProvider: ${backupProvider}")
 			def authConfig = plugin.getAuthConfig(backupProvider)
-			log.info("Ray :: restoreBackup: authConfig: ${authConfig}")
 			def container = morpheusContext.services.workload.get(containerId)
-			log.info("Ray :: restoreBackup: container: ${container}")
 			def restoreConfig = backup.getConfigProperty("infrastructureConfig")
-			log.info("Ray :: restoreBackup: restoreConfig: ${restoreConfig}")
-			log.info("Ray :: restoreBackup: restoreConfig?.server: ${restoreConfig?.server}")
 
-			log.info("Ray :: restoreBackup: containerId: ${containerId}")
-			log.info("Ray :: restoreBackup: backup.containerId: ${backup.containerId}")
-			if(containerId && containerId != backup.containerId) {
+			if (containerId && containerId != backup.containerId) {
 				opts.restoreNew = true
 				backupRestore.containerId = containerId
 				backupRestore.setConfigProperty("restoreType", "new")
-				//backupRestore.save(flush:true)
-				//morpheusContext.services.backup.backupRestore.save(backupRestore)
-				log.info("Ray :: restoreBackup: container.server?.name: ${container.server?.name}")
-				log.info("Ray :: restoreBackup: container.name: ${container.name}")
-				log.info("Ray :: restoreBackup: restoreConfig.server?.name: ${restoreConfig?.server?.name}")
 				opts.vmName = container.server?.name ?: container.name ?: restoreConfig?.server?.name
-				log.info("Ray :: restoreBackup: opts.vmName: ${opts.vmName}")
 				def parentServer = originalContainer?.server?.parentServer
-				log.info("Ray :: restoreBackup: parentServer: ${parentServer}")
-				log.info("Ray :: restoreBackup: restoreConfig.server?.parentServerId: ${restoreConfig?.server?.parentServerId}")
-				if(!parentServer && restoreConfig?.server?.parentServerId) {
+				log.debug("restoreBackup: parentServer: ${parentServer}")
+				if (!parentServer && restoreConfig?.server?.parentServerId) {
 					parentServer = morpheusContext.services.computeServer.get(restoreConfig?.server?.parentServerId)
-					log.info("Ray :: restoreBackup: parentServer1: ${parentServer}")
 				}
 				opts.esxHost = parentServer?.name
-				log.info("Ray :: restoreBackup: opts.esxHost: ${opts.esxHost}")
 				def resourcePool = originalContainer?.server?.resourcePool
-				log.info("Ray :: restoreBackup: resourcePool: ${resourcePool}")
-				log.info("Ray :: restoreBackup: restoreConfig.server?.resourcePoolId: ${restoreConfig?.server?.resourcePoolId}")
-				if(!resourcePool && restoreConfig?.server?.resourcePoolId) {
-					//resourcePool = ComputeZonePool.get(restoreConfig.server.resourcePoolId)
+				if (!resourcePool && restoreConfig?.server?.resourcePoolId) {
 					resourcePool = morpheusContext.services.cloud.pool.get(restoreConfig?.server.resourcePoolId)
 				}
 				opts.resourcePool = resourcePool?.name
-				log.info("Ray :: restoreBackup: opts.resourcePool: ${opts.resourcePool}")
-				log.info("Ray :: restoreBackup: originalContainer?.server: ${originalContainer?.server}")
-				log.info("Ray :: restoreBackup: originalContainer?.server?.volumes: ${originalContainer?.server?.volumes}")
-				log.info("Ray :: restoreBackup: originalContainer?.server?.volumes?.getAt(0): ${originalContainer?.server?.volumes?.getAt(0)}")
-				log.info("Ray :: restoreBackup: originalContainer?.server?.volumes?.getAt(0)?.datastore?.name: ${originalContainer?.server?.volumes?.getAt(0)?.datastore?.name}")
 				def datastoreName = originalContainer?.server?.volumes?.getAt(0)?.datastore?.name
-				log.info("Ray :: restoreBackup: datastoreName: ${datastoreName}")
-				log.info("Ray :: restoreBackup: restoreConfig.server?.volumes?.getAt(0)?.datastoreName: ${restoreConfig?.server?.volumes?.getAt(0)?.datastoreName}")
-				if(!datastoreName && restoreConfig?.server?.volumes?.getAt(0)?.datastoreName) {
+				if (!datastoreName && restoreConfig?.server?.volumes?.getAt(0)?.datastoreName) {
 					datastoreName = restoreConfig?.server?.volumes?.getAt(0)?.datastoreName
 				}
 				opts.datastore = datastoreName
-				log.info("Ray :: restoreBackup: opts.datastore: ${opts.datastore}")
 			}
 
 			def vmExternalId = originalContainer?.server?.internalId ?: restoreConfig?.server?.internalId
-			log.info("Ray :: restoreBackup: vmExternalId: ${vmExternalId}")
-
-			log.info("Ray :: restoreBackup: backupResult.backup.backupJob: ${backupResult.backup.backupJob}")
-			log.info("Ray :: restoreBackup: backupJobId: ${backupJobId}")
-			log.info("Ray :: restoreBackup: opts: ${opts}")
-			def results = CommvaultBackupUtility.restoreVM(authConfig, vmExternalId, backupResult.backup.backupJob, backupJobId, opts)
-			log.info("Ray :: restoreBackup: results: ${results}")
+			def results = CommvaultApiUtility.restoreVM(authConfig, vmExternalId, backupResult.backup.backupJob, backupJobId, opts)
 			log.debug("restoreBackup result: {}", results)
-			if(results.success) {
+			if (results.success) {
 				//update instance status to restoring
 				def instance = container?.instance
 				instance?.status = Instance.Status.restoring.toString()
-				log.info("Ray :: restoreBackup: instance?.status: ${instance?.status}")
-				//instance?.save(flush:true)
 				morpheusContext.services.instance.save(instance)
 				container.status = Workload.Status.pending
-				//container.save(flush:true)
-				log.info("Ray :: restoreBackup: container.status: ${container.status}")
 				morpheusContext.services.workload.save(container)
 				container.server.status = Instance.Status.provisioning.toString()
 				container.server.name = instance.name
-				//container.server.save(flush:true)
-				log.info("Ray :: restoreBackup: container.server.name: ${container.server.name}")
 				morpheusContext.services.computeServer.save(container.server)
-				updateBackupRestore(backupRestore, [status:BackupRestore.Status.IN_PROGRESS.toString(), externalStatusRef: results.restoreJobId])
-				//rtn.status = instance.status
+				updateBackupRestore(backupRestore, [status: BackupRestore.Status.IN_PROGRESS.toString(), externalStatusRef: results.restoreJobId])
 				response.data.updates = true
 				response.success = true
 			} else {
-				updateBackupRestore(backupRestore, [status:BackupRestore.Status.FAILED.toString(), errorMessage: results.msg])
+				updateBackupRestore(backupRestore, [status: BackupRestore.Status.FAILED.toString(), errorMessage: results.msg])
 			}
-			log.info("Ray :: restoreBackup: authConfig.token: ${authConfig.token}")
-			log.info("Ray :: restoreBackup: authConfig.apiUrl: ${authConfig.apiUrl}")
 			if (authConfig.token) {
-				//logoutSession(authConfig)
 				CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
 			}
-		} catch(e) {
+		} catch (e) {
 			log.error("restoreBackup error", e)
 			response.error = "Failed to restore Commvault backup: ${e}"
 		}
 		return response
+	}
+
+	def updateBackupRestore(BackupRestore backupRestore, Map updates) {
+		try {
+			if (backupRestore) {
+				def now = new Date()
+				if (updates?.status) {
+					backupRestore.status = updates?.status
+				}
+				if (updates?.status == BackupRestore.Status.FAILED.toString()) {
+					backupRestore.errorMessage = updates?.errorMessage
+				}
+				if (updates.externalStatusRef) {
+					backupRestore.externalStatusRef = updates.externalStatusRef
+				}
+				if (backupRestore.startDate) {
+					backupRestore.duration = now.time - backupRestore.startDate?.time
+				}
+				if (backupRestore.status == BackupRestore.Status.FAILED.toString() || backupRestore.status == BackupRestore.Status.SUCCEEDED.toString()) {
+					backupRestore.endDate = now
+				}
+				backupRestore.lastUpdated = now
+			}
+		} catch (Exception e) {
+			log.error("Failed to update restore result", e)
+		}
 	}
 
 	/**
@@ -247,315 +215,161 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 	 */
 	@Override
 	ServiceResponse refreshBackupRestoreResult(BackupRestore backupRestore, BackupResult backupResult) {
-		// syncBackupRestoreResult -> finalizeBackup()
-		log.info("Ray :: refreshBackupRestoreResult: backupRestore: ${backupRestore}")
-		log.info("Ray :: refreshBackupRestoreResult: backupResult: ${backupResult}")
+		log.debug("refreshBackupRestoreResult: backupRestore: ${backupRestore}")
 		ServiceResponse<BackupRestoreResponse> rtn = ServiceResponse.prepare(new BackupRestoreResponse(backupRestore))
-		Backup backup = (Backup) morpheus.services.backup.find(new DataQuery().withFilter("id", backupResult.backup.id).withJoins(["backupProvider", "backupProvider.account"]))
-		log.info("Ray :: refreshBackupRestoreResult: backup: ${backup}")
-		log.info("Ray :: refreshBackupRestoreResult: backup?.id: ${backup?.id}")
-		log.info("Ray :: refreshBackupRestoreResult: isCommvaultEnabled(backup): ${isCommvaultEnabled(backup)}")
-		if(isCommvaultEnabled(backup)) {
-			//syncBackupRestoreResult(backup, backupRestore, rtn)
-
-
-
-			try{
-				Map restoreSession = null
-				def backupProvider = backup.backupProvider
-				log.info("Ray :: syncBackupRestoreResult: backupProvider: ${backupProvider}")
-				log.info("Ray :: syncBackupRestoreResult: backupProvider?.name: ${backupProvider?.name}")
-				def authConfig = plugin.getAuthConfig(backupProvider)
-				log.info("Ray :: syncBackupRestoreResult: authConfig: ${authConfig}")
-				def restoreSessionId = backupRestore.externalStatusRef
-				log.info("Ray :: syncBackupRestoreResult: restoreSessionId: ${restoreSessionId}")
-				if(restoreSessionId) {
-					def result = CommvaultBackupUtility.getJob(authConfig, restoreSessionId)
-					log.info("Ray :: syncBackupRestoreResult: result: ${result}")
-					restoreSession = result.result
-					log.info("Ray :: syncBackupRestoreResult: restoreSession: ${restoreSession}")
-					log.info("Ray :: syncBackupRestoreResult: authConfig1: ${authConfig}")
-					if (authConfig.token) {
-						CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
-					}
-				}
-
-				log.debug "restoreSession: ${restoreSession}"
-				log.info("Ray :: syncBackupRestoreResult: restoreSession1: ${restoreSession}")
-				if(restoreSession) {
-					//update the restore with what we got back from commvault
-					def restoreStatus = getBackupStatus(restoreSession.result)
-					log.info("Ray :: syncBackupRestoreResult: restoreStatus: ${restoreStatus}")
-					def startDate = restoreSession.startTime
-					def endDate = restoreSession.endTime
-					log.info("Ray :: syncBackupRestoreResult: startDate: ${startDate}")
-					log.info("Ray :: syncBackupRestoreResult: endDate: ${endDate}")
-
-					log.debug("restore session status update: ${restoreStatus}")
-					if(restoreStatus == BackupResult.Status.SUCCEEDED.toString()) {
-						log.info("Ray :: syncBackupRestoreResult: inside if")
-						if(startDate) {
-							def start = startDate?.toLong() * 1000
-							rtn.data.backupRestore.startDate = start ? new Date(start) : null
-						}
-						//restore.save(flush:true)
-						//morpheusContext.services.backup.backupRestore.save(backupRestore)
-
-						finalizeRestore(backupRestore)
-						//backupRestore.status = BackupResult.Status.SUCCEEDED.toString()
-					} else {
-						log.info("Ray :: syncBackupRestoreResult: inside else")
-						if(startDate && endDate) {
-							def start = startDate?.toLong() * 1000
-							def end = endDate?.toLong() * 1000
-							rtn.data.backupRestore.startDate = start ? new Date(start) : null
-							rtn.data.backupRestore.endDate = end ? new Date(end) : null
-							rtn.data.backupRestore.lastUpdated = new Date()
-							rtn.data.backupRestore.duration = (start && end) ? (end - start) : 0
-						}
-						rtn.data.backupRestore.status = restoreStatus
-						//restore.save(flush:true)
-						//morpheusContext.services.backup.backupRestore.save(backupRestore)
-					}
-					updateInstanceStatus(backupRestore)
-				} else {
-					log.info("Ray :: syncBackupRestoreResult: inside restoreSession else")
-					def syncAttempts = backupRestore.getConfigProperty('syncAttempts') ?: 0
-					log.info("Ray :: syncBackupRestoreResult: syncAttempts: ${syncAttempts}")
-					if(syncAttempts > 10) {
-						rtn.data.backupRestore.status = BackupResult.Status.FAILED.toString()
-						rtn.data.backupRestore.errorMessage = "Unable to fetch restore status from commvault"
-						//restore.save()
-						//morpheusContext.services.backup.backupRestore.save(backupRestore)
-						updateInstanceStatus(backupRestore)
-					} else {
-						rtn.data.backupRestore.setConfigProperty('syncAttempts', syncAttempts + 1)
-						//restore.save(flush:true)
-						//morpheusContext.services.backup.backupRestore.save(backupRestore)
-					}
-				}
-				log.info("Ray :: syncBackupRestoreResult: backupRestore?.status: ${backupRestore?.status}")
-				//rtn.data = backupRestore
-				rtn.data.updates = true
-			} catch(Exception ex) {
-				log.error("syncBackupRestoreResult error", ex)
-			}
-			return rtn
-		}
-		rtn.success = true
-		log.info("Ray :: refreshBackupRestoreResult: rtn: ${rtn}")
-		log.info("Ray :: refreshBackupRestoreResult: rtn?.data: ${rtn?.data}")
-		return rtn
-	}
-
-	def updateBackupRestore(BackupRestore backupRestore, Map updates) {
+		Backup backup = (Backup) morpheusContext.services.backup.find(new DataQuery().withFilter("id", backupResult.backup.id).withJoins(["backupProvider", "backupProvider.account"]))
+		BackupProvider backupProvider = backup.backupProvider
 		try {
-			if(backupRestore) {
-				def now = new Date()
-				if(updates?.status) {
-					backupRestore.status = updates?.status
-				}
-				if(updates?.status == BackupRestore.Status.FAILED.toString()) {
-					backupRestore.errorMessage = updates?.errorMessage
-				}
-				if(updates.externalStatusRef) {
-					backupRestore.externalStatusRef = updates.externalStatusRef
-				}
-				if(backupRestore.startDate) {
-					backupRestore.duration = now.time - backupRestore.startDate?.time
-				}
-				if(backupRestore.status == BackupRestore.Status.FAILED.toString() || backupRestore.status ==  BackupRestore.Status.SUCCEEDED.toString()) {
-					backupRestore.endDate = now
-				}
-				backupRestore.lastUpdated = now
-				//backupRestore.save(flush:true)
-				log.info("Ray :: restoreBackup: backupRestore.status: ${backupRestore.status}")
-				log.info("Ray :: restoreBackup: updates: ${updates}")
-				//morpheusContext.services.backup.backupRestore.save(backupRestore)
+			if (!backupProvider?.enabled) {
+				rtn.msg = "BackupProvider not enabled"
+				return rtn
 			}
-		} catch(Exception e) {
-			log.error("Failed to update restore result", e)
-		}
-	}
-
-	def isCommvaultEnabled(backup) {
-		backup?.backupProvider.enabled
-	}
-
-	//sync our backup result record with what is in commvault
-	/*def syncBackupRestoreResult(Backup backup, BackupRestore backupRestore, rtn, Map restoreSession=null) {
-		log.debug "syncBackupRestoreResult: backup:${backup}, restore:${backupRestore}, restoreSession:${restoreSession}"
-		log.info("Ray :: syncBackupRestoreResult: backup:${backup}, restore:${backupRestore}, restoreSession:${restoreSession}")
-		try{
-			if(!restoreSession) {
-				def backupProvider = backup.backupProvider
-				log.info("Ray :: syncBackupRestoreResult: backupProvider: ${backupProvider}")
-				log.info("Ray :: syncBackupRestoreResult: backupProvider?.name: ${backupProvider?.name}")
-				def authConfig = plugin.getAuthConfig(backupProvider)
-				log.info("Ray :: syncBackupRestoreResult: authConfig: ${authConfig}")
-				def restoreSessionId = backupRestore.externalStatusRef
-				log.info("Ray :: syncBackupRestoreResult: restoreSessionId: ${restoreSessionId}")
-				if(restoreSessionId) {
-					def result = CommvaultBackupUtility.getJob(authConfig, restoreSessionId)
-					log.info("Ray :: syncBackupRestoreResult: result: ${result}")
-					restoreSession = result.result
-					log.info("Ray :: syncBackupRestoreResult: restoreSession: ${restoreSession}")
-					log.info("Ray :: syncBackupRestoreResult: authConfig1: ${authConfig}")
-					if (authConfig.token) {
-						CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
-					}
+			Map restoreSession = null
+			def authConfig = plugin.getAuthConfig(backupProvider)
+			def restoreSessionId = backupRestore.externalStatusRef
+			if (restoreSessionId) {
+				def result = CommvaultBackupUtility.getJob(authConfig, restoreSessionId)
+				log.debug("result: ${result}")
+				restoreSession = result.result
+				if (authConfig.token) {
+					CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
 				}
 			}
-			log.debug "restoreSession: ${restoreSession}"
-			log.info("Ray :: syncBackupRestoreResult: restoreSession1: ${restoreSession}")
-			if(restoreSession) {
+			log.info("restoreSession: ${restoreSession}")
+			if (restoreSession) {
 				//update the restore with what we got back from commvault
-				def restoreStatus = getBackupStatus(restoreSession.result)
-				log.info("Ray :: syncBackupRestoreResult: restoreStatus: ${restoreStatus}")
+				def restoreStatus = CommvaultReferenceUtility.getBackupStatus(restoreSession.result)
+				log.debug("restoreStatus : ${restoreStatus}")
 				def startDate = restoreSession.startTime
 				def endDate = restoreSession.endTime
-				log.info("Ray :: syncBackupRestoreResult: startDate: ${startDate}")
-				log.info("Ray :: syncBackupRestoreResult: endDate: ${endDate}")
-
 				log.debug("restore session status update: ${restoreStatus}")
-				if(restoreStatus == BackupResult.Status.SUCCEEDED.toString()) {
-					log.info("Ray :: syncBackupRestoreResult: inside if")
-					if(startDate) {
+				if (restoreStatus == BackupResult.Status.SUCCEEDED.toString()) {
+					if (startDate) {
 						def start = startDate?.toLong() * 1000
-						backupRestore.startDate = start ? new Date(start) : null
+						rtn.data.backupRestore.startDate = start ? new Date(start) : null
 					}
-					//restore.save(flush:true)
-					//morpheusContext.services.backup.backupRestore.save(backupRestore)
-					finalizeRestore(backupRestore)
+					morpheusContext.services.backup.backupRestore.save(rtn.data.backupRestore)
+					finalizeRestore(rtn.data.backupRestore)
 				} else {
-					log.info("Ray :: syncBackupRestoreResult: inside else")
-					if(startDate && endDate) {
+					if (startDate && endDate) {
 						def start = startDate?.toLong() * 1000
 						def end = endDate?.toLong() * 1000
-						backupRestore.startDate = start ? new Date(start) : null
-						backupRestore.endDate = end ? new Date(end) : null
-						backupRestore.lastUpdated = new Date()
-						backupRestore.duration = (start && end) ? (end - start) : 0
+						rtn.data.backupRestore.startDate = start ? new Date(start) : null
+						rtn.data.backupRestore.endDate = end ? new Date(end) : null
+						rtn.data.backupRestore.lastUpdated = new Date()
+						rtn.data.backupRestore.duration = (start && end) ? (end - start) : 0
 					}
-					backupRestore.status = restoreStatus
-					//restore.save(flush:true)
-					//morpheusContext.services.backup.backupRestore.save(backupRestore)
+					rtn.data.backupRestore.status = restoreStatus
+					morpheusContext.services.backup.backupRestore.save(rtn.data.backupRestore)
 				}
-				updateInstanceStatus(backupRestore)
+				updateInstanceStatus(rtn.data.backupRestore)
 			} else {
-				log.info("Ray :: syncBackupRestoreResult: inside restoreSession else")
 				def syncAttempts = backupRestore.getConfigProperty('syncAttempts') ?: 0
-				log.info("Ray :: syncBackupRestoreResult: syncAttempts: ${syncAttempts}")
-				if(syncAttempts > 10) {
-					backupRestore.status = BackupResult.Status.FAILED.toString()
-					backupRestore.errorMessage = "Unable to fetch restore status from commvault"
-					//restore.save()
-					//morpheusContext.services.backup.backupRestore.save(backupRestore)
-					updateInstanceStatus(backupRestore)
+				log.debug("syncAttempts: ${syncAttempts}")
+				if (syncAttempts > 10) {
+					rtn.data.backupRestore.status = BackupResult.Status.FAILED.toString()
+					rtn.data.backupRestore.errorMessage = "Unable to fetch restore status from commvault"
+					morpheusContext.services.backup.backupRestore.save(rtn.data.backupRestore)
+					updateInstanceStatus(rtn.data.backupRestore)
 				} else {
-					backupRestore.setConfigProperty('syncAttempts', syncAttempts + 1)
-					//restore.save(flush:true)
-					//morpheusContext.services.backup.backupRestore.save(backupRestore)
+					rtn.data.backupRestore.setConfigProperty('syncAttempts', syncAttempts + 1)
+					morpheusContext.services.backup.backupRestore.save(rtn.data.backupRestore)
 				}
 			}
-			log.info("Ray :: syncBackupRestoreResult: backupRestore?.status: ${backupRestore?.status}")
-			//rtn.data = backupRestore
-			rtn.data.updates = true
-		} catch(Exception ex) {
-			log.error("syncBackupRestoreResult error", ex)
+		} catch (Exception ex) {
+			log.error("refreshBackupRestoreResult error", ex)
 		}
+		rtn.data.updates = true
 		return rtn
-	}*/
-
-	private getBackupStatus(String backupState) {
-		def status
-		log.info("Ray :: getBackupStatus: backupState: ${backupState}")
-		if(backupState.toLowerCase().contains("completed") && backupState.toLowerCase().contains("errors")) {
-			status = BackupResult.Status.SUCCEEDED_WARNING
-		} else if(backupState.contains("Failed") || backupState.contains("errors")) {
-			status = BackupResult.Status.FAILED
-		} else if(["Interrupted", "Killed", "Suspend", "Suspend Pending", "Kill Pending"].contains(backupState) || backupState.contains("Killed")) {
-			status = BackupResult.Status.CANCELLED
-		} else if(["Running", "Waiting", "Pending"].contains(backupState) || backupState.contains("Running")) {
-			status = BackupResult.Status.IN_PROGRESS
-		} else if(backupState == "Completed" || backupState.contains("Completed")) {
-			status = BackupResult.Status.SUCCEEDED
-		} else if(backupState == "Queued") {
-			status = BackupResult.Status.START_REQUESTED
-		} else if(["Kill", "Pending" ,"Interrupt", "Pending"].contains(backupState)) {
-			status = BackupResult.Status.CANCEL_REQUESTED
-		}
-		log.info("Ray :: getBackupStatus: status: ${status}")
-
-		return status ? status.toString() : status
 	}
 
-	def updateInstanceStatus(BackupRestore backupRestore) {
-		log.info("Ray :: updateInstanceStatus: backupRestore: ${backupRestore}")
+	ServiceResponse finalizeRestore(BackupRestore restore) {
+		log.debug("finalizeRestore: {}", restore)
+		def instance
+		def instanceId
 		try {
-			log.info("Ray :: updateInstanceStatus: backupRestore.containerId: ${backupRestore.containerId}")
-			def targetContainer = morpheusContext.services.workload.get(backupRestore.containerId) //Container.get(restore.containerId)
-			log.info("Ray :: updateInstanceStatus: targetContainer: ${targetContainer}")
-			def instance = targetContainer?.instance
-			log.info("Ray :: updateInstanceStatus: instance: ${instance}")
-
-			log.info("Ray :: updateInstanceStatus: backupRestore.status: ${backupRestore.status}")
-			if(backupRestore.status.equals(BackupRestore.Status.SUCCEEDED.name())) {
-				log.info("Ray :: updateInstanceStatus: Inside if")
-				instance?.status = Instance.Status.running
-				//instance?.save(flush:true)
-				if (instance) {
-					morpheusContext.services.instance.save(instance)
+			// make sure to change status of restore so it doesn't overlap itself
+			restore.status = BackupRestore.Status.FINALIZING
+			morpheusContext.services.backup.backupRestore.save(restore)
+			// Need to update the externalId as it has changed
+			def targetWorkload = morpheusContext.services.workload.get(restore.containerId)
+			instance = targetWorkload?.instance
+			instanceId = instance.id
+			def server = morpheusContext.services.computeServer.get(targetWorkload.server.id)
+			// get the severed discovered by cloud sync
+			if (!server.externalId && !server.uniqueId) {
+				ComputeServer matchedServer = morpheusContext.services.computeServer.find(
+						new DataQuery().withFilters(
+								new DataFilter('name', server.name),
+								new DataFilter('id', '!=', server.id)
+						)
+				)
+				if (matchedServer) {
+					server.externalId = matchedServer.externalId
+					server.internalId = matchedServer.internalId
+					server.uniqueId = matchedServer.uniqueId
+					morpheusContext.services.computeServer.save(server)
+					def restoreToNew = restore.getConfigProperty("restoreType") == "new"
+					if (restoreToNew) {
+						// reset cloud-init and reload the local clout-init user data
+						if (server.sourceImage?.isCloudInit && server.serverOs?.platform != 'windows') {
+							def out = morpheusContext.executeCommandOnServer(server, "sudo cloud-init clean --logs; sudo cloud-init init --local; sync", true, server.sshUsername, server.sshPassword, null, null, null, null, true, true).blockingGet()
+							log.debug("finalizeRestore: out: ${out}")
+							morpheusContext.async.computeServer.restartServer(server.id).subscribe().dispose()
+						}
+					}
+				} else {
+					restore.status = BackupRestore.Status.IN_PROGRESS.toString()
+					restore.endDate = null
+					morpheusContext.services.backup.backupRestore.save(restore)
 				}
+			}
+			log.debug("server externalIP: ${server.externalIp}")
+			if (server.externalIp) {
+				morpheusContext.async.backup.backupRestore.finalizeRestore(targetWorkload)
+				restore.status = BackupRestore.Status.SUCCEEDED.toString()
+				restore.endDate = new Date()
+				restore.lastUpdated = new Date()
+				restore.duration = restore.endDate.getTime() - restore.startDate.getTime()
+				morpheusContext.services.backup.backupRestore.save(restore)
+			}
+		} catch (e) {
+			log.error("Error in finalizeRestore: ${e}", e)
+			if (instanceId) {
+				def instanceRecord = morpheusContext.services.instance.get(instanceId)
+				instanceRecord.status = Instance.Status.failed
+				morpheusContext.services.instance.save(instanceRecord)
+			}
+			restore.status = BackupRestore.Status.FAILED.toString()
+			restore.endDate = new Date()
+			restore.lastUpdated = new Date()
+			restore.duration = restore.endDate.getTime() - restore.startDate.getTime()
+			morpheusContext.services.backup.backupRestore.save(restore)
+		}
+		return ServiceResponse.success()
+	}
+
+	def updateInstanceStatus(BackupRestore restore) {
+		try {
+			def targetContainer = morpheusContext.services.workload.get(restore.containerId)
+			def instance = targetContainer?.instance
+
+			if (restore.status == BackupRestore.Status.SUCCEEDED.name()) {
+				instance?.status = Instance.Status.running
+				morpheusContext.services.instance.save(instance)
 				targetContainer.server.status = "provisioned"
 				targetContainer.status = Workload.Status.running
 				targetContainer.userStatus = Workload.Status.running
-				//targetContainer.save(flush:true)
 				morpheusContext.services.workload.save(targetContainer)
-			} else if(backupRestore.status.equals(BackupRestore.Status.FAILED.name())) {
-				log.info("Ray :: updateInstanceStatus: Inside else if")
+			} else if (restore.status == BackupRestore.Status.FAILED.name()) {
 				instance?.status = Instance.Status.unknown
-				//instance?.save(flush:true)
-				if (instance) {
-					morpheusContext.services.instance.save(instance)
-				}
+				morpheusContext.services.instance.save(instance)
 				targetContainer.server.status = Instance.Status.unknown.toString()
 				targetContainer.status = Workload.Status.unknown
-				//targetContainer.save(flush:true)
 				morpheusContext.services.workload.save(targetContainer)
 			}
 		} catch (e) {
 			log.error("Error updating instance status: ${e}", e)
 		}
-	}
-
-	ServiceResponse finalizeRestore(BackupRestore backupRestore) {
-		log.info("finalizeRestore: {}", backupRestore)
-		log.info("Ray :: finalizeRestore: backupRestore: ${backupRestore}")
-		def instance
-		try {
-			// Need to update the externalId as it has changed
-			log.info("Ray :: finalizeRestore: backupRestore.containerId: ${backupRestore.containerId}")
-			def targetWorkload = morpheusContext.services.workload.get(backupRestore.containerId)
-			// def server = targetWorkload?.server
-
-			log.info("Ray :: finalizeRestore: targetWorkload: ${targetWorkload}")
-			morpheusContext.async.backup.backupRestore.finalizeRestore(targetWorkload)
-
-			// do we still need this with finalizeRestore above?
-			// if(server?.zone?.zoneType?.code == 'vmware' && server?.serverOs?.vendor == 'centos') {
-			// 	log.debug("Finalizing restore: renew IP for CentOS VM.")
-			// 	morpheus.executeCommandOnServer(server, "dhclient", null, null, null, null, null, null, null, true, true)
-			// }
-		} catch(e) {
-			log.error("Error in finalizeRestore: ${e}", e)
-			instance?.status = Instance.Status.failed
-			//instance?.save(flush:true)
-			if(instance) {
-				morpheusContext.services.instance.save(instance)
-			}
-		}
-
-		return ServiceResponse.success()
 	}
 }

@@ -1,6 +1,6 @@
 package com.morpheusdata.commvault.datasets
 
-import com.morpheusdata.commvault.utils.CommvaultComputeUtility
+import com.morpheusdata.commvault.utils.CommvaultReferenceUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.data.*
@@ -122,7 +122,7 @@ class CommvaultClientsDatasetProvider extends AbstractDatasetProvider<ReferenceD
             if (clientResults.size() > 0) {
                 clientResults.each { client ->
                     def clientInstanceType = client.getConfigProperty('vsInstanceType')
-                    def clientInstanceTypeCode = clientInstanceType ? CommvaultComputeUtility.getvsInstanceType(clientInstanceType?.toString()) : null
+                    def clientInstanceTypeCode = clientInstanceType ? CommvaultReferenceUtility.getvsInstanceType(clientInstanceType?.toString()) : null
                     if (!cloud || cloud?.cloudType?.provisionTypes?.find { it.code == clientInstanceTypeCode }) {
                         clients << [name: client.name, id: client.id, value: client.id]
                     }

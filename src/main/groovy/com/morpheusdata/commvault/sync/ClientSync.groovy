@@ -1,7 +1,7 @@
 package com.morpheusdata.commvault.sync
 
 
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.data.DataFilter
 import com.morpheusdata.core.data.DataQuery
@@ -31,7 +31,7 @@ class ClientSync {
     def execute() {
         log.debug("ClientSync >> execute()")
         try {
-            def listResults = CommvaultBackupUtility.listClients(this.authConfigMap)
+            def listResults = CommvaultApiUtility.listClients(this.authConfigMap)
             log.debug("listResults.success: ${listResults.success}")
             if (listResults.success) {
                 def existingItems = morpheus.async.referenceData.listIdentityProjections(

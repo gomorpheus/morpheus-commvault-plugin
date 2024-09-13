@@ -16,7 +16,7 @@
 package com.morpheusdata.commvault
 
 import com.morpheusdata.commvault.backup.CommvaultBackupProvider
-import com.morpheusdata.commvault.utils.CommvaultBackupUtility
+import com.morpheusdata.commvault.utils.CommvaultApiUtility
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.model.AccountCredential
@@ -49,7 +49,7 @@ class CommvaultPlugin extends Plugin {
         //credentials
         backupProvider = loadCredentials(backupProvider)
         def rtn = [
-                apiUrl: CommvaultBackupUtility.getApiUrl(backupProvider),
+                apiUrl: CommvaultApiUtility.getApiUrl(backupProvider),
                 username:backupProvider.credentialData?.username ?: backupProvider.username,
                 password:backupProvider.credentialData?.password ?: backupProvider.password,
                 basePath:apiBasePath
@@ -70,4 +70,5 @@ class CommvaultPlugin extends Plugin {
         }
         return backupProvider
     }
+    
 }
