@@ -168,7 +168,7 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 				updateBackupRestore(backupRestore, [status: BackupRestore.Status.FAILED.toString(), errorMessage: results.msg])
 			}
 			if (authConfig.token) {
-				CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
+				CommvaultApiUtility.logout(authConfig.apiUrl, authConfig.token)
 			}
 		} catch (e) {
 			log.error("restoreBackup error", e)
@@ -228,11 +228,11 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 			def authConfig = plugin.getAuthConfig(backupProvider)
 			def restoreSessionId = backupRestore.externalStatusRef
 			if (restoreSessionId) {
-				def result = CommvaultBackupUtility.getJob(authConfig, restoreSessionId)
+				def result = CommvaultApiUtility.getJob(authConfig, restoreSessionId)
 				log.debug("result: ${result}")
 				restoreSession = result.result
 				if (authConfig.token) {
-					CommvaultBackupUtility.logout(authConfig.apiUrl, authConfig.token)
+					CommvaultApiUtility.logout(authConfig.apiUrl, authConfig.token)
 				}
 			}
 			log.info("restoreSession: ${restoreSession}")
@@ -322,6 +322,8 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 					restore.status = BackupRestore.Status.IN_PROGRESS.toString()
 					restore.endDate = null
 					morpheusContext.services.backup.backupRestore.save(restore)
+					// trigger a cloud refresh to sync up the restored vm with the discovered vm.
+					morpheusContext.async.cloud.refresh(server.cloud).subscribe()
 				}
 			}
 			log.debug("server externalIP: ${server.externalIp}")
