@@ -357,6 +357,13 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				}
 
 				results = CommvaultApiUtility.backupSubclient(authConfig, subclientId)
+				log.info("Ray :: executeBackup: sourceImage: {}, isCloudInit: {}, platform: {}", computeServer.sourceImage, computeServer.sourceImage.isCloudInit, computeServer.serverOs?.platform)
+				if(computeServer.sourceImage && computeServer.sourceImage.isCloudInit && computeServer.serverOs?.platform != 'windows') {
+					log.info("Ray :: executeBackup: Before cmd execute")
+					morpheusContext.executeCommandOnServer(computeServer, 'sudo rm -f /etc/cloud/cloud.cfg.d/99-manual-cache.cfg; sudo cp /etc/machine-id /tmp/machine-id-old ; sync', true, computeServer.sshUsername, computeServer.sshPassword, null, null, null, null, true, false).blockingGet()
+					log.info("Ray :: executeBackup: After cmd execute")
+				}
+				results = CommvaultBackupUtility.backupSubclient(authConfig, subclientId)
 
 				if(!results.success) {
 					if(results.errorCode == 2) {
@@ -439,6 +446,18 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 				}
 				rtn.data.updates = true
 				rtn.success = true
+				// backup completed, re-enable cloud-init
+				log.info("Ray :: refreshBackupResult: status: ${rtn.data.backupResult.status}")
+				if([BackupResult.Status.FAILED.toString(), BackupResult.Status.CANCELLED.toString(), BackupResult.Status.SUCCEEDED.toString()].contains(rtn.data.backupResult.status)) {
+					Long computeServerId = backupResult.serverId
+					ComputeServer computeServer = morpheusContext.services.computeServer.get(computeServerId)
+					log.info("Ray :: refreshBackupResult: sourceImage: {}, isCloudInit: {}, platform: {}", computeServer.sourceImage, computeServer.sourceImage.isCloudInit, computeServer.serverOs?.platform)
+					if(computeServer && computeServer.sourceImage && computeServer.sourceImage.isCloudInit && computeServer.serverOs?.platform != 'windows') {
+						log.info("Ray :: refreshBackupResult: Before execute")
+						morpheusContext.executeCommandOnServer(computeServer, "sudo bash -c \"echo 'manual_cache_clean: True' >> /etc/cloud/cloud.cfg.d/99-manual-cache.cfg\"; sudo cat /tmp/machine-id-old > /etc/machine-id ; sudo rm /tmp/machine-id-old ; sync", true, computeServer.sshUsername, computeServer.sshPassword, null, null, null, null, true, true).blockingGet()
+						log.info("Ray :: refreshBackupResult: After execute")
+					}
+				}
 
 			}
 			logoutSession(authConfig)
