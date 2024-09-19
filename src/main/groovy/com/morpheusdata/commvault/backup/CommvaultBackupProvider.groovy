@@ -128,7 +128,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * The backup provider supports backups outside an encapsulating job.
 	 */
 	@Override
-	public Boolean getHasOptionalJob() { return true; }
+	public Boolean getHasOptionalJob() { return false; }
 
 	/**
 	 * The backup provider supports scheduled backups. This is primarily used for display of hte schedules and providing
