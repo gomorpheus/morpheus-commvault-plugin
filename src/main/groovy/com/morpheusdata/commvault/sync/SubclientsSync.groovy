@@ -38,6 +38,12 @@ class SubclientsSync {
             def listResults = CommvaultApiUtility.listSubclients(authConfig, refDataList)
             if(listResults.success) {
                 ArrayList<Map> cloudItems = listResults.subclients.findAll { !it.name.endsWith("-cvvm") }
+                cloudItems.each { item ->
+                    if (item.name == 'default') {
+                        item.name = "${item.name} [${item.clientName}]"
+                    }
+                }
+
                 Observable<BackupJobIdentityProjection> existingItems = morpheusContext.async.backupJob.listIdentityProjections(backupProviderModel)
                 SyncTask<BackupJobIdentityProjection, ArrayList<Map>, BackupJob> syncTask = new SyncTask<>(existingItems, cloudItems)
 
@@ -75,6 +81,7 @@ class SubclientsSync {
 
             Boolean doSave = false
             def jobName = masterItem.name.replace("-${existingItem.account.id}", "")
+
             if (existingItem.name != jobName) {
                 existingItem.name = jobName
                 doSave = true
@@ -100,7 +107,7 @@ class SubclientsSync {
                 doSave = true
             }
 
-            if (doSave == true) {
+            if (doSave) {
                 log.debug "updating subclients!! ${existingItem.name}"
                 morpheusContext.async.backupJob.save(existingItem).blockingGet()
             }
@@ -114,13 +121,13 @@ class SubclientsSync {
         def objCategory = "commvault.job.${backupProviderModel.id}"
 
         for(cloudItem in itemsToAdd) {
-            def name = cloudItem.name == 'default' ? "${cloudItem.name} [${cloudItem.clientName}]" : cloudItem.name
+
             def addConfig = [
                     account         : backupProviderModel.account,
                     backupProvider  : backupProviderModel,
                     code            : objCategory + '.' + cloudItem.externalId,
                     category        : objCategory,
-                    name            : name,
+                    name            : cloudItem.name,
                     externalId      : cloudItem.externalId,
                     source          : 'commvault',
                     enabled         : cloudItem.backupEnabled,
