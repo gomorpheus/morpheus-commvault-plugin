@@ -149,7 +149,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * The backup provider supports retention counts for maintaining the desired number of backups.
 	 */
 	@Override
-	public Boolean getHasRetentionCount() { return true; }
+	public Boolean getHasRetentionCount() { return false; }
 
 	/**
 	 * Get the list of option types for the backup provider. The option types are used for creating and updating an
