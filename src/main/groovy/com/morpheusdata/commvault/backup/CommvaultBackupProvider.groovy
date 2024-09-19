@@ -77,7 +77,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	Icon getIcon() {
-		return new Icon(path:"icon.svg", darkPath: "icon-dark.svg")
+		return new Icon(path:"commvault-light.svg", darkPath: "commvault-dark.svg")
 	}
 
 	/**
