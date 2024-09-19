@@ -104,7 +104,8 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * only and may not directly support backups.
 	 */
 	@Override
-	public Boolean getHasBackups() { return true; }
+	public Boolean getHasBackups() { return false; }
+//	public Boolean getHasBackups() { return true; }
 
 	/**
 	 * The backup provider supports creating new jobs.
@@ -141,7 +142,8 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * The backup provider supports running multiple workload backups within an encapsulating job.
 	 */
 	@Override
-	public Boolean getHasJobs() { return true; }
+	public Boolean getHasJobs() { return false; }
+//	public Boolean getHasJobs() { return true; }
 
 	/**
 	 * The backup provider supports retention counts for maintaining the desired number of backups.
