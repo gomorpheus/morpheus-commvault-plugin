@@ -92,7 +92,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	public Boolean getCreatable() { return true; }
-	
+
 	/**
 	 * The backup provider supports restoring to a new workload.
 	 */
@@ -104,8 +104,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * only and may not directly support backups.
 	 */
 	@Override
-	public Boolean getHasBackups() { return false; }
-//	public Boolean getHasBackups() { return true; }
+	public Boolean getHasBackups() { return true; }
 
 	/**
 	 * The backup provider supports creating new jobs.
@@ -142,14 +141,16 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 * The backup provider supports running multiple workload backups within an encapsulating job.
 	 */
 	@Override
-	public Boolean getHasJobs() { return false; }
-//	public Boolean getHasJobs() { return true; }
+	public Boolean getHasJobs() { return true; }
 
 	/**
 	 * The backup provider supports retention counts for maintaining the desired number of backups.
 	 */
 	@Override
-	public Boolean getHasRetentionCount() { return false; }
+	public Boolean getHasRetentionCount() { return true; }
+
+	@Override
+	Boolean getHasServers() { return true }
 
 	/**
 	 * Get the list of option types for the backup provider. The option types are used for creating and updating an
