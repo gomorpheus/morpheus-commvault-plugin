@@ -158,9 +158,12 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 				morpheusContext.services.instance.save(instance)
 				container.status = Workload.Status.pending
 				morpheusContext.services.workload.save(container)
-				container.server.status = Instance.Status.provisioning.toString()
-				container.server.name = instance.name
-				morpheusContext.services.computeServer.save(container.server)
+				ComputeServer computeServer = morpheusContext.services.computeServer.get(container.server?.id)
+				if (computeServer) {
+					computeServer.status = Instance.Status.provisioning.toString()
+					computeServer.name = instance.name
+					morpheusContext.services.computeServer.save(computeServer)
+				}
 				updateBackupRestore(backupRestore, [status: BackupRestore.Status.IN_PROGRESS.toString(), externalStatusRef: results.restoreJobId])
 				response.data.updates = true
 				response.success = true
