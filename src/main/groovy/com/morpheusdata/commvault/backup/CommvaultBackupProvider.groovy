@@ -77,7 +77,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	Icon getIcon() {
-		return new Icon(path:"icon.svg", darkPath: "icon-dark.svg")
+		return new Icon(path:"commvault-light.svg", darkPath: "commvault-dark.svg")
 	}
 
 	/**
@@ -92,7 +92,7 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	public Boolean getCreatable() { return true; }
-	
+
 	/**
 	 * The backup provider supports restoring to a new workload.
 	 */
@@ -148,6 +148,9 @@ class CommvaultBackupProvider extends AbstractBackupProvider {
 	 */
 	@Override
 	public Boolean getHasRetentionCount() { return false; }
+
+	@Override
+	Boolean getHasServers() { return true }
 
 	/**
 	 * Get the list of option types for the backup provider. The option types are used for creating and updating an
