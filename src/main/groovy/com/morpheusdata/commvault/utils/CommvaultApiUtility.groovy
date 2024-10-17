@@ -276,7 +276,7 @@ class CommvaultApiUtility {
 	}
 
 
-	static removeVMFromSubclient(authConfig, subclientId, vmExternalId, vmName, Map opts = [:]) {
+	static removeVMFromSubclient(authConfig, subclientId, vmName, vmDisplayName, vmType, Map opts = [:]) {
 		def rtn = [success:false]
 		authConfig.token = authConfig.token ?: getToken(authConfig.apiUrl, authConfig.username, authConfig.password)?.token
 		def requestWriter = new StringWriter()
@@ -285,7 +285,7 @@ class CommvaultApiUtility {
 			 subClientProperties(){
 				 vmContentOperationType("DELETE")
 				 vmContent(){
-					 children(equalsOrNotEquals: 1, name: vmExternalId, displayName: vmName, type: "VM")
+					 children(equalsOrNotEquals: 1, name: vmExternalId, displayName: vmDisplayName, type: vmType)
 				 }
 			 }
 		 }
