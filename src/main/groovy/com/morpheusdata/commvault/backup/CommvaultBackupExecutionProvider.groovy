@@ -138,7 +138,7 @@ class CommvaultBackupExecutionProvider implements BackupExecutionProvider {
 					if(subclientResults.success) {
 						def subclientVM = subclientResults?.subclient?.vmContent?.children?.find { it.name == server.externalId || it.name == server.internalId }
 						if(subclientVM) {
-							rtn = CommvaultApiUtility.removeVMFromSubclient(authConfig, subclientId, subclientVM.name, backup.name)
+							rtn = CommvaultApiUtility.removeVMFromSubclient(authConfig, subclientId, subclientVM.name, subclientVM.displayName, subclientVM.type)
 							if(rtn.errorCode && !rtn.success) {
 								rtn.success = true //this means its probably not found
 							}
