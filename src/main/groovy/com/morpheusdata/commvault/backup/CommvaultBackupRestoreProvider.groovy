@@ -331,7 +331,7 @@ class CommvaultBackupRestoreProvider implements BackupRestoreProvider {
 			}
 			log.debug("server externalIP: ${server.externalIp}")
 			if (server.externalIp) {
-				morpheusContext.async.backup.backupRestore.finalizeRestore(targetWorkload)
+				morpheusContext.async.backup.backupRestore.finalizeRestore(targetWorkload).blockingGet()
 				restore.status = BackupRestore.Status.SUCCEEDED.toString()
 				restore.endDate = new Date()
 				restore.lastUpdated = new Date()
